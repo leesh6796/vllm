@@ -1,10 +1,18 @@
 import os
 from typing import Optional, Tuple
 
-from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
-                         ModelConfig, ObservabilityConfig, ParallelConfig,
-                         PromptAdapterConfig, SchedulerConfig,
-                         SpeculativeConfig)
+from vllm.config import (
+    CacheConfig,
+    DeviceConfig,
+    LoadConfig,
+    LoRAConfig,
+    ModelConfig,
+    ObservabilityConfig,
+    ParallelConfig,
+    PromptAdapterConfig,
+    SchedulerConfig,
+    SpeculativeConfig,
+)
 from vllm.logger import init_logger
 from vllm.utils import get_distributed_init_method, get_ip, get_open_port
 from vllm.v1.outputs import ModelRunnerOutput
@@ -44,17 +52,19 @@ class GPUExecutor:
         self.worker.load_model()
 
     def _create_worker(
-            self,
-            local_rank: int = 0,
-            rank: int = 0,
-            distributed_init_method: Optional[str] = None) -> Worker:
+        self,
+        local_rank: int = 0,
+        rank: int = 0,
+        distributed_init_method: Optional[str] = None,
+    ) -> Worker:
         """Return worker init args for a given rank."""
         # see https://github.com/NVIDIA/nccl/issues/1234
-        os.environ['NCCL_CUMEM_ENABLE'] = '0'
+        os.environ["NCCL_CUMEM_ENABLE"] = "0"
 
         if distributed_init_method is None:
             distributed_init_method = get_distributed_init_method(
-                get_ip(), get_open_port())
+                get_ip(), get_open_port()
+            )
         return Worker(
             model_config=self.model_config,
             parallel_config=self.parallel_config,
@@ -78,8 +88,7 @@ class GPUExecutor:
         return self.worker.determine_num_available_blocks()
 
     def initialize_cache(self, num_gpu_blocks: int) -> None:
-        """Initialize the KV cache by invoking the underlying worker.
-        """
+        """Initialize the KV cache by invoking the underlying worker."""
         # NOTE: This is logged in the executor because there can be >1 worker
         # with other executors. We could log in the engine level, but work
         # remains to abstract away the device for non-GPU configurations.

@@ -14,8 +14,12 @@ import torch.nn as nn
 from vllm.logger import init_logger
 from vllm.utils import is_hip
 
-from .interfaces import (has_inner_state, is_attention_free,
-                         supports_multimodal, supports_pp)
+from .interfaces import (
+    has_inner_state,
+    is_attention_free,
+    supports_multimodal,
+    supports_pp,
+)
 from .interfaces_base import is_embedding_model, is_text_generation_model
 
 logger = init_logger(__name__)
@@ -146,24 +150,25 @@ _ROCM_UNSUPPORTED_MODELS: List[str] = []
 
 # Models partially supported by ROCm.
 # Architecture -> Reason.
-_ROCM_SWA_REASON = ("Sliding window attention (SWA) is not yet supported in "
-                    "Triton flash attention. For half-precision SWA support, "
-                    "please use CK flash attention by setting "
-                    "`VLLM_USE_TRITON_FLASH_ATTN=0`")
+_ROCM_SWA_REASON = (
+    "Sliding window attention (SWA) is not yet supported in "
+    "Triton flash attention. For half-precision SWA support, "
+    "please use CK flash attention by setting "
+    "`VLLM_USE_TRITON_FLASH_ATTN=0`"
+)
 _ROCM_PARTIALLY_SUPPORTED_MODELS: Dict[str, str] = {
-    "Qwen2ForCausalLM":
-    _ROCM_SWA_REASON,
-    "MistralForCausalLM":
-    _ROCM_SWA_REASON,
-    "MixtralForCausalLM":
-    _ROCM_SWA_REASON,
-    "PaliGemmaForConditionalGeneration":
-    ("ROCm flash attention does not yet "
-     "fully support 32-bit precision on PaliGemma"),
-    "Phi3VForCausalLM":
-    ("ROCm Triton flash attention may run into compilation errors due to "
-     "excessive use of shared memory. If this happens, disable Triton FA "
-     "by setting `VLLM_USE_TRITON_FLASH_ATTN=0`")
+    "Qwen2ForCausalLM": _ROCM_SWA_REASON,
+    "MistralForCausalLM": _ROCM_SWA_REASON,
+    "MixtralForCausalLM": _ROCM_SWA_REASON,
+    "PaliGemmaForConditionalGeneration": (
+        "ROCm flash attention does not yet "
+        "fully support 32-bit precision on PaliGemma"
+    ),
+    "Phi3VForCausalLM": (
+        "ROCm Triton flash attention may run into compilation errors due to "
+        "excessive use of shared memory. If this happens, disable Triton FA "
+        "by setting `VLLM_USE_TRITON_FLASH_ATTN=0`"
+    ),
 }
 
 
@@ -227,13 +232,15 @@ class _LazyRegisteredModel(_BaseRegisteredModel):
     """
     Represents a model that has not been imported in the main process.
     """
+
     module_name: str
     class_name: str
 
     # Performed in another process to avoid initializing CUDA
     def inspect_model_cls(self) -> _ModelInfo:
         return _run_in_subprocess(
-            lambda: _ModelInfo.from_model_cls(self.load_model_cls()))
+            lambda: _ModelInfo.from_model_cls(self.load_model_cls())
+        )
 
     def load_model_cls(self) -> Type[nn.Module]:
         mod = importlib.import_module(self.module_name)
@@ -247,20 +254,23 @@ def _try_load_model_cls(
 ) -> Optional[Type[nn.Module]]:
     if is_hip():
         if model_arch in _ROCM_UNSUPPORTED_MODELS:
-            raise ValueError(f"Model architecture '{model_arch}' is not "
-                             "supported by ROCm for now.")
+            raise ValueError(
+                f"Model architecture '{model_arch}' is not "
+                "supported by ROCm for now."
+            )
 
         if model_arch in _ROCM_PARTIALLY_SUPPORTED_MODELS:
             msg = _ROCM_PARTIALLY_SUPPORTED_MODELS[model_arch]
             logger.warning(
-                "Model architecture '%s' is partially "
-                "supported by ROCm: %s", model_arch, msg)
+                "Model architecture '%s' is partially " "supported by ROCm: %s",
+                model_arch,
+                msg,
+            )
 
     try:
         return model.load_model_cls()
     except Exception:
-        logger.exception("Error in loading model architecture '%s'",
-                         model_arch)
+        logger.exception("Error in loading model architecture '%s'", model_arch)
         return None
 
 
@@ -272,8 +282,7 @@ def _try_inspect_model_cls(
     try:
         return model.inspect_model_cls()
     except Exception:
-        logger.exception("Error in inspecting model architecture '%s'",
-                         model_arch)
+        logger.exception("Error in inspecting model architecture '%s'", model_arch)
         return None
 
 
@@ -304,8 +313,10 @@ class _ModelRegistry:
         if model_arch in self.models:
             logger.warning(
                 "Model architecture %s is already registered, and will be "
-                "overwritten by the new model class %s.", model_arch,
-                model_cls)
+                "overwritten by the new model class %s.",
+                model_arch,
+                model_cls,
+            )
 
         if isinstance(model_cls, str):
             split_str = model_cls.split(":")
@@ -324,10 +335,10 @@ class _ModelRegistry:
 
         raise ValueError(
             f"Model architectures {architectures} are not supported for now. "
-            f"Supported architectures: {all_supported_archs}")
+            f"Supported architectures: {all_supported_archs}"
+        )
 
-    def _try_load_model_cls(self,
-                            model_arch: str) -> Optional[Type[nn.Module]]:
+    def _try_load_model_cls(self, model_arch: str) -> Optional[Type[nn.Module]]:
         if model_arch not in self.models:
             return None
 
@@ -400,22 +411,22 @@ class _ModelRegistry:
     ) -> bool:
         return self.inspect_model_cls(architectures).supports_pp
 
-    def model_has_inner_state(self, architectures: Union[str,
-                                                         List[str]]) -> bool:
+    def model_has_inner_state(self, architectures: Union[str, List[str]]) -> bool:
         return self.inspect_model_cls(architectures).has_inner_state
 
-    def is_attention_free_model(self, architectures: Union[str,
-                                                           List[str]]) -> bool:
+    def is_attention_free_model(self, architectures: Union[str, List[str]]) -> bool:
         return self.inspect_model_cls(architectures).is_attention_free
 
 
-ModelRegistry = _ModelRegistry({
-    model_arch: _LazyRegisteredModel(
-        module_name=f"vllm.model_executor.models.{mod_relname}",
-        class_name=cls_name,
-    )
-    for model_arch, (mod_relname, cls_name) in _VLLM_MODELS.items()
-})
+ModelRegistry = _ModelRegistry(
+    {
+        model_arch: _LazyRegisteredModel(
+            module_name=f"vllm.model_executor.models.{mod_relname}",
+            class_name=cls_name,
+        )
+        for model_arch, (mod_relname, cls_name) in _VLLM_MODELS.items()
+    }
+)
 
 _T = TypeVar("_T")
 
@@ -430,15 +441,17 @@ def _run_in_subprocess(fn: Callable[[], _T]) -> _T:
         returned = subprocess.run(
             [sys.executable, "-m", "vllm.model_executor.models.registry"],
             input=input_bytes,
-            capture_output=True)
+            capture_output=True,
+        )
 
         # check if the subprocess is successful
         try:
             returned.check_returncode()
         except Exception as e:
             # wrap raised exception to provide more information
-            raise RuntimeError(f"Error raised in subprocess:\n"
-                               f"{returned.stderr.decode()}") from e
+            raise RuntimeError(
+                f"Error raised in subprocess:\n" f"{returned.stderr.decode()}"
+            ) from e
 
         with open(output_file.name, "rb") as f:
             return pickle.load(f)
@@ -447,6 +460,7 @@ def _run_in_subprocess(fn: Callable[[], _T]) -> _T:
 def _run() -> None:
     # Setup plugins
     from vllm.plugins import load_general_plugins
+
     load_general_plugins()
 
     fn, output_file = pickle.loads(sys.stdin.buffer.read())

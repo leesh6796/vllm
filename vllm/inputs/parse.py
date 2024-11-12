@@ -4,9 +4,15 @@ from typing_extensions import TypeIs
 
 from vllm.utils import is_list_of
 
-from .data import (DecoderOnlyInputs, EncoderDecoderInputs,
-                   ExplicitEncoderDecoderPrompt, PromptType, SingletonPrompt,
-                   TextPrompt, TokensPrompt)
+from .data import (
+    DecoderOnlyInputs,
+    EncoderDecoderInputs,
+    ExplicitEncoderDecoderPrompt,
+    PromptType,
+    SingletonPrompt,
+    TextPrompt,
+    TokensPrompt,
+)
 
 
 class ParsedText(TypedDict):
@@ -20,15 +26,13 @@ class ParsedTokens(TypedDict):
 
 
 @overload
-def parse_and_batch_prompt(
-        prompt: Union[str, List[str]]) -> Sequence[ParsedText]:
-    ...
+def parse_and_batch_prompt(prompt: Union[str, List[str]]) -> Sequence[ParsedText]: ...
 
 
 @overload
 def parse_and_batch_prompt(
-        prompt: Union[List[int], List[List[int]]]) -> Sequence[ParsedTokens]:
-    ...
+    prompt: Union[List[int], List[List[int]]]
+) -> Sequence[ParsedTokens]: ...
 
 
 def parse_and_batch_prompt(
@@ -45,9 +49,7 @@ def parse_and_batch_prompt(
         if is_list_of(prompt, str):
             # case 2: array of strings
             prompt = cast(List[str], prompt)
-            return [
-                ParsedText(content=elem, is_tokens=False) for elem in prompt
-            ]
+            return [ParsedText(content=elem, is_tokens=False) for elem in prompt]
         if is_list_of(prompt, int):
             # case 3: array of tokens
             prompt = cast(List[int], prompt)
@@ -59,13 +61,12 @@ def parse_and_batch_prompt(
 
             if is_list_of(prompt[0], int):
                 # case 4: array of token arrays
-                return [
-                    ParsedTokens(content=elem, is_tokens=True)
-                    for elem in prompt
-                ]
+                return [ParsedTokens(content=elem, is_tokens=True) for elem in prompt]
 
-    raise TypeError("prompt must be a string, array of strings, "
-                    "array of tokens, or array of token arrays")
+    raise TypeError(
+        "prompt must be a string, array of strings, "
+        "array of tokens, or array of token arrays"
+    )
 
 
 class ParsedStrPrompt(TypedDict):
@@ -90,8 +91,7 @@ def parse_singleton_prompt(
         return ParsedStrPrompt(type="str", content=prompt)
     elif isinstance(prompt, dict):
         if "prompt_token_ids" in prompt:
-            return ParsedTokensPrompt(type="tokens",
-                                      content=prompt)  # type: ignore
+            return ParsedTokensPrompt(type="tokens", content=prompt)  # type: ignore
         elif "prompt" in prompt:
             return ParsedTextPrompt(type="text", content=prompt)
 
@@ -99,7 +99,8 @@ def parse_singleton_prompt(
 
 
 def is_explicit_encoder_decoder_prompt(
-        prompt: PromptType) -> TypeIs[ExplicitEncoderDecoderPrompt]:
+    prompt: PromptType,
+) -> TypeIs[ExplicitEncoderDecoderPrompt]:
     return isinstance(prompt, dict) and "encoder_prompt" in prompt
 
 

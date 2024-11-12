@@ -25,11 +25,13 @@ class Request:
         self.sampling_params = sampling_params
         # Because of LoRA, the eos token id can be different for each request.
         self.eos_token_id = eos_token_id
-        self.metrics = RequestMetrics(arrival_time=arrival_time,
-                                      last_token_time=arrival_time,
-                                      first_scheduled_time=None,
-                                      first_token_time=None,
-                                      time_in_queue=None)
+        self.metrics = RequestMetrics(
+            arrival_time=arrival_time,
+            last_token_time=arrival_time,
+            first_scheduled_time=None,
+            first_token_time=None,
+            time_in_queue=None,
+        )
         self.lora_request = lora_request
 
         self.status = RequestStatus.WAITING
@@ -61,6 +63,7 @@ class Request:
 
 class RequestStatus(enum.IntEnum):
     """Status of a sequence."""
+
     WAITING = 0
     RUNNING = 1
     PREEMPTED = 2

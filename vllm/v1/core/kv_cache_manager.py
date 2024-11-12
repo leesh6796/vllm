@@ -52,8 +52,9 @@ class KVCacheManager:
         request: Request,
         num_tokens: int,
     ) -> Optional[List[int]]:
-        num_required_blocks = cdiv(request.num_computed_tokens + num_tokens,
-                                   self.block_size)
+        num_required_blocks = cdiv(
+            request.num_computed_tokens + num_tokens, self.block_size
+        )
         req_block_ids = self.req_to_block_ids[request.request_id]
         if num_required_blocks <= len(req_block_ids):
             # No new block is needed.
@@ -66,8 +67,9 @@ class KVCacheManager:
             return None
 
         # Allocate new blocks.
-        num_new_blocks = min(num_new_blocks + self.num_preallocate_blocks,
-                             num_free_blocks)
+        num_new_blocks = min(
+            num_new_blocks + self.num_preallocate_blocks, num_free_blocks
+        )
         new_block_ids = self._get_new_blocks(num_new_blocks)
         req_block_ids.extend(new_block_ids)
         self.ref_cnts[new_block_ids] += 1
@@ -85,8 +87,9 @@ class KVCacheManager:
             # Cannot allocate new blocks.
             return None
 
-        num_new_blocks = min(num_required_blocks + self.num_preallocate_blocks,
-                             num_free_blocks)
+        num_new_blocks = min(
+            num_required_blocks + self.num_preallocate_blocks, num_free_blocks
+        )
         new_block_ids = self._get_new_blocks(num_new_blocks)
         block_ids = computed_block_ids + new_block_ids
         self.req_to_block_ids[request.request_id] = block_ids

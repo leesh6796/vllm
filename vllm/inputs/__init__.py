@@ -1,8 +1,18 @@
-from .data import (DecoderOnlyInputs, EncoderDecoderInputs,
-                   ExplicitEncoderDecoderPrompt, PromptType, SingletonInputs,
-                   SingletonPrompt, TextPrompt, TokenInputs, TokensPrompt,
-                   build_explicit_enc_dec_prompt, to_enc_dec_tuple_list,
-                   token_inputs, zip_enc_dec_prompts)
+from .data import (
+    DecoderOnlyInputs,
+    EncoderDecoderInputs,
+    ExplicitEncoderDecoderPrompt,
+    PromptType,
+    SingletonInputs,
+    SingletonPrompt,
+    TextPrompt,
+    TokenInputs,
+    TokensPrompt,
+    build_explicit_enc_dec_prompt,
+    to_enc_dec_tuple_list,
+    token_inputs,
+    zip_enc_dec_prompts,
+)
 from .registry import InputContext, InputRegistry
 
 INPUT_REGISTRY = InputRegistry()
@@ -38,16 +48,20 @@ def __getattr__(name: str):
     import warnings
 
     if name == "PromptInput":
-        msg = ("PromptInput has been renamed to PromptType. "
-               "The original name will be removed in an upcoming version.")
+        msg = (
+            "PromptInput has been renamed to PromptType. "
+            "The original name will be removed in an upcoming version."
+        )
 
         warnings.warn(DeprecationWarning(msg), stacklevel=2)
 
         return PromptType
 
     if name == "LLMInputs":
-        msg = ("LLMInputs has been renamed to DecoderOnlyInputs. "
-               "The original name will be removed in an upcoming version.")
+        msg = (
+            "LLMInputs has been renamed to DecoderOnlyInputs. "
+            "The original name will be removed in an upcoming version."
+        )
 
         warnings.warn(DeprecationWarning(msg), stacklevel=2)
 
@@ -56,7 +70,8 @@ def __getattr__(name: str):
     if name == "EncoderDecoderLLMInputs":
         msg = (
             "EncoderDecoderLLMInputs has been renamed to EncoderDecoderInputs. "
-            "The original name will be removed in an upcoming version.")
+            "The original name will be removed in an upcoming version."
+        )
 
         warnings.warn(DeprecationWarning(msg), stacklevel=2)
 

@@ -3,9 +3,12 @@ from typing import TYPE_CHECKING, List, Optional, Tuple, Type
 
 import torch
 
-from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
-                                              AttentionMetadata,
-                                              AttentionMetadataBuilder)
+from vllm.attention.backends.abstract import (
+    AttentionBackend,
+    AttentionImpl,
+    AttentionMetadata,
+    AttentionMetadataBuilder,
+)
 from vllm.attention.backends.utils import CommonAttentionState
 
 if TYPE_CHECKING:
@@ -66,6 +69,7 @@ class PlaceholderAttentionBackend(AttentionBackend):
 @dataclass
 class PlaceholderAttentionMetadata(AttentionMetadata):
     """Attention metadata for prefill and decode batched together."""
+
     # (batch_size,). The sequence length per sequence. Sequence length means
     # the computed tokens + new tokens None if it is a decoding.
     seq_lens: Optional[List[int]]
@@ -135,15 +139,15 @@ class PlaceholderAttentionMetadata(AttentionMetadata):
             num_prefill_tokens=self.num_prefill_tokens,
             num_decode_tokens=0,
             slot_mapping=slot_mapping,
-            seq_lens=self.seq_lens[:self.num_prefills],
-            seq_lens_tensor=self.seq_lens_tensor[:self.num_prefills],
+            seq_lens=self.seq_lens[: self.num_prefills],
+            seq_lens_tensor=self.seq_lens_tensor[: self.num_prefills],
             max_decode_query_len=0,
             max_query_len=self.max_query_len,
             max_prefill_seq_len=self.max_prefill_seq_len,
             max_decode_seq_len=0,
-            query_start_loc=self.query_start_loc[:self.num_prefills + 1],
-            seq_start_loc=self.seq_start_loc[:self.num_prefills + 1],
-            context_lens_tensor=self.context_lens_tensor[:self.num_prefills],
+            query_start_loc=self.query_start_loc[: self.num_prefills + 1],
+            seq_start_loc=self.seq_start_loc[: self.num_prefills + 1],
+            context_lens_tensor=self.context_lens_tensor[: self.num_prefills],
             block_tables=block_tables,
             use_cuda_graph=False,
         )
@@ -168,7 +172,7 @@ class PlaceholderAttentionMetadata(AttentionMetadata):
             num_decode_tokens=self.num_decode_tokens,
             slot_mapping=slot_mapping,
             seq_lens=None,
-            seq_lens_tensor=self.seq_lens_tensor[self.num_prefills:],
+            seq_lens_tensor=self.seq_lens_tensor[self.num_prefills :],
             max_decode_query_len=self.max_decode_query_len,
             max_query_len=None,
             max_prefill_seq_len=0,
@@ -183,7 +187,8 @@ class PlaceholderAttentionMetadata(AttentionMetadata):
 
 
 class PlaceholderAttentionMetadataBuilder(
-        AttentionMetadataBuilder[PlaceholderAttentionMetadata]):
+    AttentionMetadataBuilder[PlaceholderAttentionMetadata]
+):
 
     def __init__(self, input_builder: "ModelInputForGPUBuilder"):
         self.prefill_seq_lens: List[int] = []
@@ -197,19 +202,32 @@ class PlaceholderAttentionMetadataBuilder(
         self.runner = input_builder.runner
 
     def _add_seq_group(
-            self, inter_data: "ModelInputForGPUBuilder.InterDataForSeqGroup",
-            chunked_prefill_enabled: bool):
+        self,
+        inter_data: "ModelInputForGPUBuilder.InterDataForSeqGroup",
+        chunked_prefill_enabled: bool,
+    ):
         """Add a sequence group to the metadata. Specifically update/append
         1. context length.
         """
         is_prompt = inter_data.is_prompt
 
-        for (seq_id, token_len, seq_len, curr_seq_len, query_len, context_len,
-             curr_sliding_window_block) in zip(
-                 inter_data.seq_ids, [len(t) for t in inter_data.input_tokens],
-                 inter_data.orig_seq_lens, inter_data.seq_lens,
-                 inter_data.query_lens, inter_data.context_lens,
-                 inter_data.curr_sliding_window_blocks):
+        for (
+            seq_id,
+            token_len,
+            seq_len,
+            curr_seq_len,
+            query_len,
+            context_len,
+            curr_sliding_window_block,
+        ) in zip(
+            inter_data.seq_ids,
+            [len(t) for t in inter_data.input_tokens],
+            inter_data.orig_seq_lens,
+            inter_data.seq_lens,
+            inter_data.query_lens,
+            inter_data.context_lens,
+            inter_data.curr_sliding_window_blocks,
+        ):
             self.context_lens.append(context_len)
 
             if is_prompt:
@@ -217,14 +235,21 @@ class PlaceholderAttentionMetadataBuilder(
                 self.num_prefill_tokens += token_len
                 self.prefill_seq_lens.append(seq_len)
             else:
-                assert query_len == 1, (
-                    "seq_len: {}, context_len: {}, query_len: {}".format(
-                        seq_len, context_len, query_len))
+                assert (
+                    query_len == 1
+                ), "seq_len: {}, context_len: {}, query_len: {}".format(
+                    seq_len, context_len, query_len
+                )
                 self.num_decode_tokens += query_len
                 self.curr_seq_lens.append(curr_seq_len)
 
-    def build(self, seq_lens: List[int], query_lens: List[int],
-              cuda_graph_pad_size: int, batch_size: int):
+    def build(
+        self,
+        seq_lens: List[int],
+        query_lens: List[int],
+        cuda_graph_pad_size: int,
+        batch_size: int,
+    ):
         """Build attention metadata with on-device tensors.
 
         Args:
@@ -235,23 +260,24 @@ class PlaceholderAttentionMetadataBuilder(
             batch_size: The maybe padded batch size.
         """
         for inter_data in self.input_builder.inter_data_list:
-            self._add_seq_group(inter_data,
-                                self.input_builder.chunked_prefill_enabled)
+            self._add_seq_group(inter_data, self.input_builder.chunked_prefill_enabled)
 
         device = self.runner.device
         use_captured_graph = cuda_graph_pad_size != -1
 
-        logits_soft_cap = getattr(self.runner.model_config.hf_config,
-                                  "attn_logit_softcapping", None)
+        logits_soft_cap = getattr(
+            self.runner.model_config.hf_config, "attn_logit_softcapping", None
+        )
         if logits_soft_cap is not None:
             raise ValueError(
                 "Please use Flashinfer backend for models with logits_soft_cap"
                 " (i.e., Gemma-2). Otherwise, the output might be wrong."
                 " Set Flashinfer backend by "
-                "export VLLM_ATTENTION_BACKEND=FLASHINFER.")
+                "export VLLM_ATTENTION_BACKEND=FLASHINFER."
+            )
 
         max_query_len = max(query_lens)
-        decode_query_lens = query_lens[self.num_prefills:]
+        decode_query_lens = query_lens[self.num_prefills :]
         if len(decode_query_lens) > 0:
             max_decode_query_len = max(decode_query_lens)
         else:
@@ -263,31 +289,28 @@ class PlaceholderAttentionMetadataBuilder(
         if use_captured_graph:
             num_decode_tokens = batch_size
 
-        assert max_query_len > 0, ("query_lens: {}".format(query_lens))
+        assert max_query_len > 0, "query_lens: {}".format(query_lens)
 
-        context_lens_tensor = torch.tensor(self.context_lens,
-                                           dtype=torch.int,
-                                           device=device)
-        seq_lens_tensor = torch.tensor(seq_lens,
-                                       dtype=torch.int,
-                                       device=device)
-        query_lens_tensor = torch.tensor(query_lens,
-                                         dtype=torch.long,
-                                         device=device)
-        query_start_loc = torch.zeros(query_lens_tensor.shape[0] + 1,
-                                      dtype=torch.int32,
-                                      device=device)
-        seq_start_loc = torch.zeros(seq_lens_tensor.shape[0] + 1,
-                                    dtype=torch.int32,
-                                    device=device)
-        torch.cumsum(seq_lens_tensor,
-                     dim=0,
-                     dtype=seq_start_loc.dtype,
-                     out=seq_start_loc[1:])
-        torch.cumsum(query_lens_tensor,
-                     dim=0,
-                     dtype=query_start_loc.dtype,
-                     out=query_start_loc[1:])
+        context_lens_tensor = torch.tensor(
+            self.context_lens, dtype=torch.int, device=device
+        )
+        seq_lens_tensor = torch.tensor(seq_lens, dtype=torch.int, device=device)
+        query_lens_tensor = torch.tensor(query_lens, dtype=torch.long, device=device)
+        query_start_loc = torch.zeros(
+            query_lens_tensor.shape[0] + 1, dtype=torch.int32, device=device
+        )
+        seq_start_loc = torch.zeros(
+            seq_lens_tensor.shape[0] + 1, dtype=torch.int32, device=device
+        )
+        torch.cumsum(
+            seq_lens_tensor, dim=0, dtype=seq_start_loc.dtype, out=seq_start_loc[1:]
+        )
+        torch.cumsum(
+            query_lens_tensor,
+            dim=0,
+            dtype=query_start_loc.dtype,
+            out=query_start_loc[1:],
+        )
 
         # Placeholders
         slot_mapping = torch.empty(0)

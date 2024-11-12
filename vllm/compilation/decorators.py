@@ -14,8 +14,9 @@ logger = init_logger(__name__)
 
 
 def support_torch_compile(
-        cls: Optional[type] = None,
-        dynamic_arg_dims: Optional[Dict[str, Union[int, List[int]]]] = None):
+    cls: Optional[type] = None,
+    dynamic_arg_dims: Optional[Dict[str, Union[int, List[int]]]] = None,
+):
     """
     A decorator to add support for compiling the forward method of a class.
 
@@ -69,7 +70,7 @@ def support_torch_compile(
     def cls_decorator_helper(cls: type):
         # helper to pass `dynamic_arg_dims`` to `_support_torch_compile``
         # to avoid too much indentation for `_support_torch_compile``
-        if not hasattr(cls, 'forward'):
+        if not hasattr(cls, "forward"):
             raise TypeError("decorated class should have a forward method.")
         sig = inspect.signature(cls.forward)
         inferred_dynamic_arg_dims = dynamic_arg_dims
@@ -77,24 +78,30 @@ def support_torch_compile(
             inferred_dynamic_arg_dims = {}
             for k, v in sig.parameters.items():
                 if v.annotation in [
-                        torch.Tensor, Optional[torch.Tensor],
-                        IntermediateTensors, Optional[IntermediateTensors]
+                    torch.Tensor,
+                    Optional[torch.Tensor],
+                    IntermediateTensors,
+                    Optional[IntermediateTensors],
                 ]:
                     inferred_dynamic_arg_dims[k] = 0
 
-            logger.debug(("Inferred dynamic dimensions for "
-                          "forward method of %s: %s"), cls,
-                         list(inferred_dynamic_arg_dims.keys()))
+            logger.debug(
+                ("Inferred dynamic dimensions for " "forward method of %s: %s"),
+                cls,
+                list(inferred_dynamic_arg_dims.keys()),
+            )
 
         if len(inferred_dynamic_arg_dims) == 0:
             raise ValueError(
                 "No dynamic dimensions found in the forward method of "
-                f"{cls}. Please provide dynamic_arg_dims explicitly.")
+                f"{cls}. Please provide dynamic_arg_dims explicitly."
+            )
 
         for k in inferred_dynamic_arg_dims:
             if k not in sig.parameters:
                 raise ValueError(
-                    f"Argument {k} not found in the forward method of {cls}")
+                    f"Argument {k} not found in the forward method of {cls}"
+                )
         return _support_torch_compile(cls, inferred_dynamic_arg_dims)
 
     if cls is not None:
@@ -105,23 +112,26 @@ def support_torch_compile(
     return cls_decorator_helper
 
 
-def _support_torch_compile(cls: type,
-                           dynamic_arg_dims: Dict[str, Union[int, List[int]]]):
+def _support_torch_compile(
+    cls: type, dynamic_arg_dims: Dict[str, Union[int, List[int]]]
+):
     """
     A decorator to add support for compiling the forward method of a class.
     """
 
     # for CompilationLevel.DYNAMO_AS_IS , the upper level model runner
     # will handle the compilation, so we don't need to do anything here.
-    if envs.VLLM_TORCH_COMPILE_LEVEL in [
-            CompilationLevel.NO_COMPILATION, CompilationLevel.DYNAMO_AS_IS
-    ] or not supports_dynamo():
+    if (
+        envs.VLLM_TORCH_COMPILE_LEVEL
+        in [CompilationLevel.NO_COMPILATION, CompilationLevel.DYNAMO_AS_IS]
+        or not supports_dynamo()
+    ):
         return cls
 
     # take care of method resolution order
     # make sure super().__init__ is called on the base class
     #  other than TorchCompileWrapperWithCustomDispatcher
-    cls.__bases__ = cls.__bases__ + (TorchCompileWrapperWithCustomDispatcher, )
+    cls.__bases__ = cls.__bases__ + (TorchCompileWrapperWithCustomDispatcher,)
 
     old_init = cls.__init__  # type: ignore
 
@@ -154,7 +164,8 @@ def _support_torch_compile(cls: type,
                     else:
                         raise ValueError(
                             "Unsupported dynamic dimensions"
-                            f" {dims} for argument {k} with type {type(arg)}.")
+                            f" {dims} for argument {k} with type {type(arg)}."
+                        )
 
         # if we don't use custom dispatcher, we can directly call the
         # compiled function and let torch.compile handle the dispatching,

@@ -16,10 +16,8 @@ def get_processor(
 
     try:
         processor = AutoProcessor.from_pretrained(
-            processor_name,
-            *args,
-            trust_remote_code=trust_remote_code,
-            **kwargs)
+            processor_name, *args, trust_remote_code=trust_remote_code, **kwargs
+        )
     except ValueError as e:
         # If the error pertains to the processor class not existing or not
         # currently being imported, suggest using the --trust-remote-code flag.
@@ -30,7 +28,8 @@ def get_processor(
                 "a custom processor not yet available in the HuggingFace "
                 "transformers library, consider setting "
                 "`trust_remote_code=True` in LLM or using the "
-                "`--trust-remote-code` flag in the CLI.")
+                "`--trust-remote-code` flag in the CLI."
+            )
             raise RuntimeError(err_msg) from e
         else:
             raise e
@@ -55,10 +54,8 @@ def get_image_processor(
 
     try:
         processor = AutoImageProcessor.from_pretrained(
-            processor_name,
-            *args,
-            trust_remote_code=trust_remote_code,
-            **kwargs)
+            processor_name, *args, trust_remote_code=trust_remote_code, **kwargs
+        )
     except ValueError as e:
         # If the error pertains to the processor class not existing or not
         # currently being imported, suggest using the --trust-remote-code flag.
@@ -69,7 +66,8 @@ def get_image_processor(
                 "a custom processor not yet available in the HuggingFace "
                 "transformers library, consider setting "
                 "`trust_remote_code=True` in LLM or using the "
-                "`--trust-remote-code` flag in the CLI.")
+                "`--trust-remote-code` flag in the CLI."
+            )
             raise RuntimeError(err_msg) from e
         else:
             raise e

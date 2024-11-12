@@ -9,8 +9,14 @@ import cloudpickle
 import zmq
 
 from vllm import AsyncEngineArgs, SamplingParams
-from vllm.config import (DecodingConfig, LoRAConfig, ModelConfig,
-                         ParallelConfig, SchedulerConfig)
+from vllm.config import (
+    DecodingConfig,
+    LoRAConfig,
+    ModelConfig,
+    ParallelConfig,
+    SchedulerConfig,
+)
+
 # yapf conflicts with isort for this block
 # yapf: disable
 from vllm.engine.multiprocessing import (ENGINE_DEAD_ERROR, IPC_DATA_EXT,
@@ -32,25 +38,26 @@ if VLLM_USE_V1:
 else:
     from vllm.engine.llm_engine import LLMEngine
 
-CONFIG_TYPE = Union[ModelConfig, DecodingConfig, ParallelConfig,
-                    SchedulerConfig, LoRAConfig]
+CONFIG_TYPE = Union[
+    ModelConfig, DecodingConfig, ParallelConfig, SchedulerConfig, LoRAConfig
+]
 
 logger = init_logger(__name__)
 
 POLLING_TIMEOUT_MS = 10000
-HEALTHY_RESPONSE = (pickle.dumps(VLLM_RPC_SUCCESS_STR), )
+HEALTHY_RESPONSE = (pickle.dumps(VLLM_RPC_SUCCESS_STR),)
 
 
 class MQLLMEngine:
     """A multiprocessing wrapper for :class:`LLMEngine`.
 
     This class is used to wrap the :class:`LLMEngine` class to enable use
-    in concurrnet manner. It runs a background loop and uses zeromq to 
+    in concurrnet manner. It runs a background loop and uses zeromq to
     receive new requests and stream outputs incrementally via ipc.
-    
+
     The :class:`LLMEngine` generate or encode process is kicked off when a new
     RPCProcessRequest is received by the input_socket.
-    
+
     The self.engine_loop checks the input_socket for new requests,
     adds them to the LLMEngine if there are any, calls the internal
     :class:`LLMEngine.step()`, and sends the RequestOutputs back over
@@ -69,24 +76,27 @@ class MQLLMEngine:
         **kwargs: Arguments for :class:`LLMEngine`.
     """
 
-    def __init__(self,
-                 ipc_path: str,
-                 use_async_sockets: bool,
-                 *args,
-                 log_requests: bool = True,
-                 **kwargs) -> None:
+    def __init__(
+        self,
+        ipc_path: str,
+        use_async_sockets: bool,
+        *args,
+        log_requests: bool = True,
+        **kwargs,
+    ) -> None:
         # For MQLLMEngine, we can use cached outputs, since each new request
         # output is immediately pickled and send over the socket, which frees
         # the python object to be reused again.
-        kwargs['use_cached_outputs'] = True
+        kwargs["use_cached_outputs"] = True
 
         self.engine = LLMEngine(*args, **kwargs)
         self.log_requests = log_requests
 
         self.use_async_sockets = use_async_sockets
         if self.use_async_sockets:
-            self.engine.process_request_outputs_callback = \
+            self.engine.process_request_outputs_callback = (
                 self._async_socket_engine_callback
+            )
 
         self.ctx = zmq.Context()  # type: ignore[attr-defined]
 
@@ -109,8 +119,9 @@ class MQLLMEngine:
         self._errored_with: Optional[BaseException] = None
 
         # Heartbeat thread
-        self.heartbeat_thread = threading.Thread(target=self._heartbeat_loop,
-                                                 daemon=True)
+        self.heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True
+        )
         self._heartbeat_stop_event = threading.Event()
         # The heartbeat needs to be faster than what the client will wait for
         # The VLLM_RPC_TIMEOUT duration is in ms, and we need one in seconds
@@ -130,27 +141,32 @@ class MQLLMEngine:
             return ENGINE_DEAD_ERROR()
 
     @classmethod
-    def from_engine_args(cls, engine_args: AsyncEngineArgs,
-                         usage_context: UsageContext, ipc_path: str):
+    def from_engine_args(
+        cls, engine_args: AsyncEngineArgs, usage_context: UsageContext, ipc_path: str
+    ):
         """Creates an MQLLMEngine from the engine arguments."""
         # Setup plugins for each process
         from vllm.plugins import load_general_plugins
+
         load_general_plugins()
 
         engine_config = engine_args.create_engine_config()
 
         executor_class = LLMEngine._get_executor_cls(engine_config)
 
-        use_async_sockets = (engine_config.model_config.use_async_output_proc
-                             and not VLLM_USE_V1)
+        use_async_sockets = (
+            engine_config.model_config.use_async_output_proc and not VLLM_USE_V1
+        )
 
-        return cls(ipc_path=ipc_path,
-                   use_async_sockets=use_async_sockets,
-                   **engine_config.to_dict(),
-                   executor_class=executor_class,
-                   log_requests=not engine_args.disable_log_requests,
-                   log_stats=not engine_args.disable_log_stats,
-                   usage_context=usage_context)
+        return cls(
+            ipc_path=ipc_path,
+            use_async_sockets=use_async_sockets,
+            **engine_config.to_dict(),
+            executor_class=executor_class,
+            log_requests=not engine_args.disable_log_requests,
+            log_stats=not engine_args.disable_log_stats,
+            usage_context=usage_context,
+        )
 
     def start(self):
         try:
@@ -177,8 +193,7 @@ class MQLLMEngine:
         del self.engine
 
     @contextmanager
-    def make_data_socket(
-            self) -> Iterator[zmq.Socket]:  # type: ignore[name-defined]
+    def make_data_socket(self) -> Iterator[zmq.Socket]:  # type: ignore[name-defined]
         socket = self.ctx.socket(zmq.constants.ROUTER)
         try:
             socket.bind(self.data_ipc_path)
@@ -198,14 +213,12 @@ class MQLLMEngine:
                 # Handle the query from the Client.
                 if request == RPCStartupRequest.IS_SERVER_READY:
                     tracing_enabled = self.engine.is_tracing_enabled()
-                    response = RPCStartupResponse(
-                        tracing_enabled=tracing_enabled)
+                    response = RPCStartupResponse(tracing_enabled=tracing_enabled)
 
             except Exception as e:
                 response = e
 
-            socket.send_multipart((identity, pickle.dumps(response)),
-                                  copy=False)
+            socket.send_multipart((identity, pickle.dumps(response)), copy=False)
 
     def run_engine_loop(self):
         """Core busy loop of the LLMEngine."""
@@ -237,9 +250,7 @@ class MQLLMEngine:
             raise
         except BaseException as e:
             self._set_errored(e)
-            rpc_err = RPCError(request_id=None,
-                               is_engine_errored=True,
-                               exception=e)
+            rpc_err = RPCError(request_id=None, is_engine_errored=True, exception=e)
             self._send_outputs(rpc_err)
             raise e
 
@@ -265,8 +276,7 @@ class MQLLMEngine:
                     else:
                         self.stop_profile()
                 else:
-                    raise ValueError("Unknown RPCRequest Type: "
-                                     f"{type(request)}")
+                    raise ValueError("Unknown RPCRequest Type: " f"{type(request)}")
 
         except Exception as e:
             self._set_errored(e)
@@ -278,9 +288,11 @@ class MQLLMEngine:
         request_id = request.request_id
 
         if self._errored_with is not None:
-            rpc_err = RPCError(request_id=request_id,
-                               is_engine_errored=True,
-                               exception=ENGINE_DEAD_ERROR(self._errored_with))
+            rpc_err = RPCError(
+                request_id=request_id,
+                is_engine_errored=True,
+                exception=ENGINE_DEAD_ERROR(self._errored_with),
+            )
             self._send_outputs(rpc_err)
 
         try:
@@ -291,7 +303,8 @@ class MQLLMEngine:
                 lora_request=request.lora_request,
                 trace_headers=request.trace_headers,
                 prompt_adapter_request=request.prompt_adapter_request,
-                priority=request.priority)
+                priority=request.priority,
+            )
 
             if self.log_requests:
                 logger.info("Added request %s.", request.request_id)
@@ -301,9 +314,9 @@ class MQLLMEngine:
             # is due to an issue adding this request to the engine,
             # rather than an issue with the engine itself.
             is_errored = self._errored_with is not None
-            rpc_err = RPCError(request_id=request_id,
-                               is_engine_errored=is_errored,
-                               exception=e)
+            rpc_err = RPCError(
+                request_id=request_id, is_engine_errored=is_errored, exception=e
+            )
             self._send_outputs(rpc_err)
 
             # Remove request from the engine.
@@ -316,7 +329,8 @@ class MQLLMEngine:
 
     def _heartbeat_loop(self):
         while not self._heartbeat_stop_event.wait(
-                timeout=self.heartbeat_interval_seconds):
+            timeout=self.heartbeat_interval_seconds
+        ):
             # Loops until the stop event is set
             self._heartbeat()
 
@@ -345,7 +359,7 @@ class MQLLMEngine:
         """Send List of RequestOutput to RPCClient."""
         if outputs:
             output_bytes = pickle.dumps(outputs)
-            self.output_socket.send_multipart((output_bytes, ), copy=False)
+            self.output_socket.send_multipart((output_bytes,), copy=False)
 
     def _send_healthy(self):
         """Send HEALTHY message to RPCClient."""
@@ -356,10 +370,9 @@ class MQLLMEngine:
         """Send UNHEALTHY message to RPCClient."""
         if not self.heartbeat_socket.closed:
             error_bytes = pickle.dumps(error)
-            self.heartbeat_socket.send_multipart((error_bytes, ), copy=False)
+            self.heartbeat_socket.send_multipart((error_bytes,), copy=False)
 
-    def _async_socket_engine_callback(self,
-                                      request_outputs: REQUEST_OUTPUTS_T):
+    def _async_socket_engine_callback(self, request_outputs: REQUEST_OUTPUTS_T):
         """Callback used by engine to make socket handling async with GPU."""
         self._send_outputs(request_outputs)
         self.handle_new_input()
@@ -385,8 +398,9 @@ class MQLLMEngine:
             self.engine.model_executor._run_workers("stop_profile")
 
 
-def run_mp_engine(engine_args: AsyncEngineArgs, usage_context: UsageContext,
-                  ipc_path: str):
+def run_mp_engine(
+    engine_args: AsyncEngineArgs, usage_context: UsageContext, ipc_path: str
+):
 
     def signal_handler(*_) -> None:
         # Interrupt server on sigterm
@@ -394,7 +408,7 @@ def run_mp_engine(engine_args: AsyncEngineArgs, usage_context: UsageContext,
 
     signal.signal(signal.SIGTERM, signal_handler)
 
-    engine = MQLLMEngine.from_engine_args(engine_args=engine_args,
-                                          usage_context=usage_context,
-                                          ipc_path=ipc_path)
+    engine = MQLLMEngine.from_engine_args(
+        engine_args=engine_args, usage_context=usage_context, ipc_path=ipc_path
+    )
     engine.start()

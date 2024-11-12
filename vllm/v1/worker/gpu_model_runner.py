@@ -7,18 +7,32 @@ import torch
 import torch.distributed
 import torch.nn as nn
 
-from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
-                         ModelConfig, ObservabilityConfig, ParallelConfig,
-                         PromptAdapterConfig, SchedulerConfig)
+from vllm.config import (
+    CacheConfig,
+    DeviceConfig,
+    LoadConfig,
+    LoRAConfig,
+    ModelConfig,
+    ObservabilityConfig,
+    ParallelConfig,
+    PromptAdapterConfig,
+    SchedulerConfig,
+)
 from vllm.forward_context import set_forward_context
 from vllm.logger import init_logger
 from vllm.model_executor.model_loader import get_model
 from vllm.multimodal import MultiModalDataDict
 from vllm.sampling_params import SamplingParams, SamplingType
-from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, DeviceMemoryProfiler, cdiv,
-                        is_pin_memory_available)
-from vllm.v1.attention.backends.flash_attn import (FlashAttentionBackend,
-                                                   FlashAttentionMetadata)
+from vllm.utils import (
+    STR_DTYPE_TO_TORCH_DTYPE,
+    DeviceMemoryProfiler,
+    cdiv,
+    is_pin_memory_available,
+)
+from vllm.v1.attention.backends.flash_attn import (
+    FlashAttentionBackend,
+    FlashAttentionMetadata,
+)
 from vllm.v1.outputs import ModelRunnerOutput
 from vllm.v1.sample.metadata import SamplingMetadata
 from vllm.v1.sample.sampler import Sampler
@@ -59,8 +73,7 @@ class GPUModelRunner:
         if cache_config.cache_dtype == "auto":
             self.kv_cache_dtype = self.dtype
         else:
-            self.kv_cache_dtype = STR_DTYPE_TO_TORCH_DTYPE[
-                cache_config.cache_dtype]
+            self.kv_cache_dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
         self.sliding_window = model_config.get_sliding_window()
         self.block_size = cache_config.block_size
@@ -69,8 +82,7 @@ class GPUModelRunner:
         self.max_num_tokens = scheduler_config.max_num_batched_tokens
 
         # Model-related.
-        self.num_attn_layers = model_config.get_num_attention_layers(
-            parallel_config)
+        self.num_attn_layers = model_config.get_num_attention_layers(parallel_config)
         self.num_kv_heads = model_config.get_num_kv_heads(parallel_config)
         self.head_size = model_config.get_head_size()
 
@@ -115,7 +127,8 @@ class GPUModelRunner:
             # Update the num_computed_tokens.
             req_state.num_computed_tokens = req_data.num_computed_tokens
             self.input_batch.num_computed_tokens_cpu[req_index] = (
-                req_data.num_computed_tokens)
+                req_data.num_computed_tokens
+            )
 
             # Update the block table.
             num_new_blocks = len(req_data.new_block_ids)
@@ -124,8 +137,9 @@ class GPUModelRunner:
             start_index = len(req_state.block_ids)
             end_index = start_index + num_new_blocks
             req_state.block_ids.extend(req_data.new_block_ids)
-            self.input_batch.block_table_cpu[
-                req_index, start_index:end_index] = req_data.new_block_ids
+            self.input_batch.block_table_cpu[req_index, start_index:end_index] = (
+                req_data.new_block_ids
+            )
 
         req_ids_to_add: List[str] = []
         # Add new requests to the cached states.
@@ -179,8 +193,8 @@ class GPUModelRunner:
         # OPTIMIZATION: Start copying the block table first.
         # This way, we can overlap the copy with the following CPU operations.
         self.input_batch.block_table[:num_reqs].copy_(
-            self.input_batch.block_table_cpu_tensor[:num_reqs],
-            non_blocking=True)
+            self.input_batch.block_table_cpu_tensor[:num_reqs], non_blocking=True
+        )
 
         # Get the number of scheduled tokens for each request.
         # TODO: The Python loop can be slow. Optimize.
@@ -189,8 +203,7 @@ class GPUModelRunner:
         for req_id in self.input_batch.req_ids[:num_reqs]:
             num_tokens = scheduler_output.num_scheduled_tokens[req_id]
             num_scheduled_tokens.append(num_tokens)
-            max_num_scheduled_tokens = max(max_num_scheduled_tokens,
-                                           num_tokens)
+            max_num_scheduled_tokens = max(max_num_scheduled_tokens, num_tokens)
         num_scheduled_tokens = np.array(num_scheduled_tokens, dtype=np.int32)
         assert max_num_scheduled_tokens > 0
 
@@ -201,20 +214,23 @@ class GPUModelRunner:
 
         # Get batched arange.
         # E.g., [2, 5, 3] -> [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
-        arange_matrix = np.tile(np.arange(max_num_scheduled_tokens),
-                                (num_reqs, 1))
+        arange_matrix = np.tile(np.arange(max_num_scheduled_tokens), (num_reqs, 1))
         mask = arange_matrix < num_scheduled_tokens[:, np.newaxis]
         arange = arange_matrix[mask]
 
         # Get positions.
-        positions = torch.empty((total_num_scheduled_tokens, ),
-                                dtype=torch.int32,
-                                device="cpu",
-                                pin_memory=self.pin_memory)
+        positions = torch.empty(
+            (total_num_scheduled_tokens,),
+            dtype=torch.int32,
+            device="cpu",
+            pin_memory=self.pin_memory,
+        )
         positions_np = positions.numpy()
-        np.add(self.input_batch.num_computed_tokens_cpu[req_indices],
-               arange,
-               out=positions_np)
+        np.add(
+            self.input_batch.num_computed_tokens_cpu[req_indices],
+            arange,
+            out=positions_np,
+        )
 
         # Get token indices.
         # E.g., [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]
@@ -222,44 +238,47 @@ class GPUModelRunner:
         # where M is the max_model_len.
         token_indices = positions_np + req_indices * self.max_model_len
         token_indices = torch.from_numpy(token_indices)
-        input_ids = torch.empty((total_num_scheduled_tokens, ),
-                                dtype=torch.int32,
-                                device="cpu",
-                                pin_memory=self.pin_memory)
-        torch.index_select(torch.from_numpy(
-            self.input_batch.token_ids_cpu).flatten(),
-                           0,
-                           token_indices,
-                           out=input_ids)
+        input_ids = torch.empty(
+            (total_num_scheduled_tokens,),
+            dtype=torch.int32,
+            device="cpu",
+            pin_memory=self.pin_memory,
+        )
+        torch.index_select(
+            torch.from_numpy(self.input_batch.token_ids_cpu).flatten(),
+            0,
+            token_indices,
+            out=input_ids,
+        )
 
         # Calculate the slot mapping.
         block_numbers = self.input_batch.block_table_cpu_tensor.flatten()[
-            token_indices // self.block_size]
+            token_indices // self.block_size
+        ]
         block_offsets = token_indices % self.block_size
-        slot_mapping = torch.empty((total_num_scheduled_tokens, ),
-                                   dtype=torch.int32,
-                                   device="cpu",
-                                   pin_memory=self.pin_memory)
-        torch.add(block_numbers * self.block_size,
-                  block_offsets,
-                  out=slot_mapping)
+        slot_mapping = torch.empty(
+            (total_num_scheduled_tokens,),
+            dtype=torch.int32,
+            device="cpu",
+            pin_memory=self.pin_memory,
+        )
+        torch.add(block_numbers * self.block_size, block_offsets, out=slot_mapping)
 
         # Prepare the attention metadata.
-        query_start_loc = torch.empty((num_reqs + 1, ),
-                                      dtype=torch.int32,
-                                      device="cpu",
-                                      pin_memory=self.pin_memory)
+        query_start_loc = torch.empty(
+            (num_reqs + 1,), dtype=torch.int32, device="cpu", pin_memory=self.pin_memory
+        )
         query_start_loc_np = query_start_loc.numpy()
         query_start_loc_np[0] = 0
         np.cumsum(num_scheduled_tokens, out=query_start_loc_np[1:])
 
-        seq_lens = (self.input_batch.num_computed_tokens_cpu[:num_reqs] +
-                    num_scheduled_tokens)
+        seq_lens = (
+            self.input_batch.num_computed_tokens_cpu[:num_reqs] + num_scheduled_tokens
+        )
         max_seq_len = seq_lens.max()
-        seq_start_loc = torch.empty((num_reqs + 1, ),
-                                    dtype=torch.int32,
-                                    device="cpu",
-                                    pin_memory=self.pin_memory)
+        seq_start_loc = torch.empty(
+            (num_reqs + 1,), dtype=torch.int32, device="cpu", pin_memory=self.pin_memory
+        )
         seq_start_loc_np = seq_start_loc.numpy()
         seq_start_loc_np[0] = 0
         np.cumsum(seq_lens, out=seq_start_loc_np[1:])
@@ -290,11 +309,12 @@ class GPUModelRunner:
         scheduler_output: "SchedulerOutput",
     ) -> SamplingMetadata:
         skip_copy = True
-        if (scheduler_output.finished_req_ids
-                or scheduler_output.preempted_req_ids):
+        if scheduler_output.finished_req_ids or scheduler_output.preempted_req_ids:
             skip_copy = False
-        if (scheduler_output.scheduled_new_reqs
-                or scheduler_output.scheduled_resumed_reqs):
+        if (
+            scheduler_output.scheduled_new_reqs
+            or scheduler_output.scheduled_resumed_reqs
+        ):
             skip_copy = False
         # Create the sampling metadata.
         sampling_metadata = self.input_batch.make_sampling_metadata(skip_copy)
@@ -334,8 +354,10 @@ class GPUModelRunner:
         num_reqs = self.input_batch.num_reqs
         for i, req_id in enumerate(self.input_batch.req_ids[:num_reqs]):
             req_state = self.requests[req_id]
-            seq_len = (req_state.num_computed_tokens +
-                       scheduler_output.num_scheduled_tokens[req_id])
+            seq_len = (
+                req_state.num_computed_tokens
+                + scheduler_output.num_scheduled_tokens[req_id]
+            )
             assert seq_len <= req_state.num_tokens
             if seq_len == req_state.num_tokens:
                 # Append the sampled token to the output token ids.
@@ -372,25 +394,24 @@ class GPUModelRunner:
         logger.info("Starting to load model %s...", self.model_config.model)
         with DeviceMemoryProfiler() as m:  # noqa: SIM117
             with patch("vllm.model_executor.layers.sampler.Sampler", Sampler):
-                self.model = get_model(model_config=self.model_config,
-                                       device_config=self.device_config,
-                                       load_config=self.load_config,
-                                       lora_config=self.lora_config,
-                                       parallel_config=self.parallel_config,
-                                       scheduler_config=self.scheduler_config,
-                                       cache_config=self.cache_config)
+                self.model = get_model(
+                    model_config=self.model_config,
+                    device_config=self.device_config,
+                    load_config=self.load_config,
+                    lora_config=self.lora_config,
+                    parallel_config=self.parallel_config,
+                    scheduler_config=self.scheduler_config,
+                    cache_config=self.cache_config,
+                )
 
         self.model_memory_usage = m.consumed_memory
-        logger.info("Loading model weights took %.4f GB",
-                    self.model_memory_usage / float(2**30))
+        logger.info(
+            "Loading model weights took %.4f GB", self.model_memory_usage / float(2**30)
+        )
 
     def _dummy_run(self, model: nn.Module, num_tokens: int) -> None:
-        input_ids = torch.zeros(num_tokens,
-                                dtype=torch.int32,
-                                device=self.device)
-        positions = torch.zeros(num_tokens,
-                                dtype=torch.long,
-                                device=self.device)
+        input_ids = torch.zeros(num_tokens, dtype=torch.int32, device=self.device)
+        positions = torch.zeros(num_tokens, dtype=torch.long, device=self.device)
         kv_caches = [None for _ in range(self.num_attn_layers)]
         model(input_ids, positions, kv_caches, attn_metadata=None)
         return
@@ -409,12 +430,14 @@ class GPUModelRunner:
     def initialize_kv_cache(self, num_blocks: int) -> None:
         assert len(self.kv_caches) == 0
         kv_cache_shape = FlashAttentionBackend.get_kv_cache_shape(
-            num_blocks, self.block_size, self.num_kv_heads, self.head_size)
+            num_blocks, self.block_size, self.num_kv_heads, self.head_size
+        )
         for _ in range(self.num_attn_layers):
             self.kv_caches.append(
-                torch.zeros(kv_cache_shape,
-                            dtype=self.kv_cache_dtype,
-                            device=self.device))
+                torch.zeros(
+                    kv_cache_shape, dtype=self.kv_cache_dtype, device=self.device
+                )
+            )
 
 
 @dataclass
@@ -455,14 +478,15 @@ class InputBatch:
         self.req_ids: List[Optional[str]] = [None] * max_num_reqs
         self.req_id_to_index: Dict[str, int] = {}
 
-        self.token_ids_cpu = np.empty((max_num_reqs, max_model_len),
-                                      dtype=np.int32)
+        self.token_ids_cpu = np.empty((max_num_reqs, max_model_len), dtype=np.int32)
         self.num_computed_tokens_cpu = np.empty(max_num_reqs, dtype=np.int32)
 
         # Attention-related.
-        self.block_table = torch.zeros((max_num_reqs, max_num_blocks_per_req),
-                                       device=self.device,
-                                       dtype=torch.int32)
+        self.block_table = torch.zeros(
+            (max_num_reqs, max_num_blocks_per_req),
+            device=self.device,
+            dtype=torch.int32,
+        )
         self.block_table_cpu_tensor = torch.zeros(
             (max_num_reqs, max_num_blocks_per_req),
             device="cpu",
@@ -472,39 +496,31 @@ class InputBatch:
         self.block_table_cpu = self.block_table_cpu_tensor.numpy()
 
         # Sampling-related.
-        self.temperature = torch.empty((max_num_reqs, ),
-                                       dtype=torch.float32,
-                                       device=device)
-        self.temperature_cpu_tensor = torch.empty((max_num_reqs, ),
-                                                  dtype=torch.float32,
-                                                  device="cpu",
-                                                  pin_memory=pin_memory)
+        self.temperature = torch.empty(
+            (max_num_reqs,), dtype=torch.float32, device=device
+        )
+        self.temperature_cpu_tensor = torch.empty(
+            (max_num_reqs,), dtype=torch.float32, device="cpu", pin_memory=pin_memory
+        )
         self.temperature_cpu = self.temperature_cpu_tensor.numpy()
         self.greedy_reqs: Set[str] = set()
         self.random_reqs: Set[str] = set()
 
-        self.top_p = torch.empty((max_num_reqs, ),
-                                 dtype=torch.float32,
-                                 device=device)
-        self.top_p_cpu_tensor = torch.empty((max_num_reqs, ),
-                                            dtype=torch.float32,
-                                            device="cpu",
-                                            pin_memory=pin_memory)
+        self.top_p = torch.empty((max_num_reqs,), dtype=torch.float32, device=device)
+        self.top_p_cpu_tensor = torch.empty(
+            (max_num_reqs,), dtype=torch.float32, device="cpu", pin_memory=pin_memory
+        )
         self.top_p_cpu = self.top_p_cpu_tensor.numpy()
         self.top_p_reqs: Set[str] = set()
 
-        self.top_k = torch.empty((max_num_reqs, ),
-                                 dtype=torch.int32,
-                                 device=device)
-        self.top_k_cpu_tensor = torch.empty((max_num_reqs, ),
-                                            dtype=torch.int32,
-                                            device="cpu",
-                                            pin_memory=pin_memory)
+        self.top_k = torch.empty((max_num_reqs,), dtype=torch.int32, device=device)
+        self.top_k_cpu_tensor = torch.empty(
+            (max_num_reqs,), dtype=torch.int32, device="cpu", pin_memory=pin_memory
+        )
         self.top_k_cpu = self.top_k_cpu_tensor.numpy()
         self.top_k_reqs: Set[str] = set()
 
-        self.generators: List[Optional[torch.Generator]] = [None
-                                                            ] * max_num_reqs
+        self.generators: List[Optional[torch.Generator]] = [None] * max_num_reqs
 
         self.num_logprobs: Dict[str, int] = {}
         self.prompt_logprob_reqs: Set[str] = set()
@@ -523,12 +539,10 @@ class InputBatch:
 
         # Copy the prompt token ids and output token ids.
         num_prompt_tokens = len(request.prompt_token_ids)
-        self.token_ids_cpu[
-            req_index, :num_prompt_tokens] = request.prompt_token_ids
+        self.token_ids_cpu[req_index, :num_prompt_tokens] = request.prompt_token_ids
         start_idx = num_prompt_tokens
         end_idx = start_idx + len(request.output_token_ids)
-        self.token_ids_cpu[req_index,
-                           start_idx:end_idx] = request.output_token_ids
+        self.token_ids_cpu[req_index, start_idx:end_idx] = request.output_token_ids
 
         self.num_computed_tokens_cpu[req_index] = request.num_computed_tokens
         num_blocks = len(request.block_ids)
@@ -611,14 +625,12 @@ class InputBatch:
 
             # TODO(woosuk): Optimize the copy of token_ids_cpu and
             # block_table_cpu.
-            self.token_ids_cpu[empty_index] = self.token_ids_cpu[
-                last_req_index]
-            self.num_computed_tokens_cpu[
-                empty_index] = self.num_computed_tokens_cpu[last_req_index]
-            self.block_table_cpu[empty_index] = self.block_table_cpu[
-                last_req_index]
-            self.temperature_cpu[empty_index] = self.temperature_cpu[
-                last_req_index]
+            self.token_ids_cpu[empty_index] = self.token_ids_cpu[last_req_index]
+            self.num_computed_tokens_cpu[empty_index] = self.num_computed_tokens_cpu[
+                last_req_index
+            ]
+            self.block_table_cpu[empty_index] = self.block_table_cpu[last_req_index]
+            self.temperature_cpu[empty_index] = self.temperature_cpu[last_req_index]
             self.top_p_cpu[empty_index] = self.top_p_cpu[last_req_index]
             self.top_k_cpu[empty_index] = self.top_k_cpu[last_req_index]
             self.generators[empty_index] = self.generators[last_req_index]
@@ -631,21 +643,24 @@ class InputBatch:
         skip_copy: bool = False,
     ) -> SamplingMetadata:
         if not skip_copy:
-            self.temperature[:self.num_reqs].copy_(
-                self.temperature_cpu_tensor[:self.num_reqs], non_blocking=True)
-            self.top_p[:self.num_reqs].copy_(
-                self.top_p_cpu_tensor[:self.num_reqs], non_blocking=True)
-            self.top_k[:self.num_reqs].copy_(
-                self.top_k_cpu_tensor[:self.num_reqs], non_blocking=True)
+            self.temperature[: self.num_reqs].copy_(
+                self.temperature_cpu_tensor[: self.num_reqs], non_blocking=True
+            )
+            self.top_p[: self.num_reqs].copy_(
+                self.top_p_cpu_tensor[: self.num_reqs], non_blocking=True
+            )
+            self.top_k[: self.num_reqs].copy_(
+                self.top_k_cpu_tensor[: self.num_reqs], non_blocking=True
+            )
         return SamplingMetadata(
-            temperature=self.temperature[:self.num_reqs],
+            temperature=self.temperature[: self.num_reqs],
             all_greedy=self.all_greedy,
             all_random=self.all_random,
-            top_p=self.top_p[:self.num_reqs],
-            top_k=self.top_k[:self.num_reqs],
+            top_p=self.top_p[: self.num_reqs],
+            top_k=self.top_k[: self.num_reqs],
             no_top_p=self.no_top_p,
             no_top_k=self.no_top_k,
-            generators=self.generators[:self.num_reqs],
+            generators=self.generators[: self.num_reqs],
             no_generator=self.no_generator,
             max_num_logprobs=self.max_num_logprobs,
         )

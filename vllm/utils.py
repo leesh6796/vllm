@@ -21,9 +21,25 @@ from asyncio import FIRST_COMPLETED, AbstractEventLoop, Future, Task
 from collections.abc import Mapping
 from functools import lru_cache, partial, wraps
 from platform import uname
-from typing import (Any, AsyncGenerator, Awaitable, Callable, Dict, Generic,
-                    Hashable, List, Literal, Optional, OrderedDict, Set, Tuple,
-                    Type, TypeVar, Union, overload)
+from typing import (
+    Any,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Dict,
+    Generic,
+    Hashable,
+    List,
+    Literal,
+    Optional,
+    OrderedDict,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 from uuid import uuid4
 
 import numpy as np
@@ -46,58 +62,62 @@ logger = init_logger(__name__)
 # Reminder: Please update docs/source/serving/compatibility_matrix.rst
 # If the feature combo become valid
 
-STR_NOT_IMPL_ENC_DEC_SWA = \
-    "Sliding window attention for encoder/decoder models " + \
-                    "is not currently supported."
+STR_NOT_IMPL_ENC_DEC_SWA = (
+    "Sliding window attention for encoder/decoder models "
+    + "is not currently supported."
+)
 
-STR_NOT_IMPL_ENC_DEC_PREFIX_CACHE = \
-    "Prefix caching for encoder/decoder models " + \
-                    "is not currently supported."
+STR_NOT_IMPL_ENC_DEC_PREFIX_CACHE = (
+    "Prefix caching for encoder/decoder models " + "is not currently supported."
+)
 
-STR_NOT_IMPL_ENC_DEC_CHUNKED_PREFILL = \
-    "Chunked prefill for encoder/decoder models " + \
-                    "is not currently supported."
+STR_NOT_IMPL_ENC_DEC_CHUNKED_PREFILL = (
+    "Chunked prefill for encoder/decoder models " + "is not currently supported."
+)
 
 STR_NOT_IMPL_ENC_DEC_LOGIT_SOFTCAP = (
     "Models with logits_soft_cap "
     "require FlashInfer backend, which is "
     "currently not supported for encoder/decoder "
-    "models.")
+    "models."
+)
 
-STR_NOT_IMPL_ENC_DEC_LORA = ("LoRA is currently not currently "
-                             "supported with encoder/decoder "
-                             "models.")
+STR_NOT_IMPL_ENC_DEC_LORA = (
+    "LoRA is currently not currently " "supported with encoder/decoder " "models."
+)
 
-STR_NOT_IMPL_ENC_DEC_PP = ("Pipeline parallelism is not "
-                           "currently supported with "
-                           "encoder/decoder models.")
+STR_NOT_IMPL_ENC_DEC_PP = (
+    "Pipeline parallelism is not " "currently supported with " "encoder/decoder models."
+)
 
-STR_NOT_IMPL_ENC_DEC_MM = ("Multimodal is not currently "
-                           "supported with encoder/decoder "
-                           "models.")
+STR_NOT_IMPL_ENC_DEC_MM = (
+    "Multimodal is not currently " "supported with encoder/decoder " "models."
+)
 
-STR_NOT_IMPL_ENC_DEC_SPEC_DEC = ("Speculative decoding is not "
-                                 "currently supported with encoder/"
-                                 "decoder models.")
+STR_NOT_IMPL_ENC_DEC_SPEC_DEC = (
+    "Speculative decoding is not " "currently supported with encoder/" "decoder models."
+)
 
-STR_NOT_IMPL_ENC_DEC_BACKEND = ("XFormers is the only backend "
-                                "currently supported with encoder/"
-                                "decoder models.")
+STR_NOT_IMPL_ENC_DEC_BACKEND = (
+    "XFormers is the only backend "
+    "currently supported with encoder/"
+    "decoder models."
+)
 
-STR_NOT_IMPL_ENC_DEC_PROMPT_ADAPTER = ("Prompt adapters are not "
-                                       "currently supported with encoder/"
-                                       "decoder models.")
+STR_NOT_IMPL_ENC_DEC_PROMPT_ADAPTER = (
+    "Prompt adapters are not " "currently supported with encoder/" "decoder models."
+)
 
-STR_NOT_IMPL_ENC_DEC_CPU = ("CPU is not currently supported with "
-                            "encoder/decoder models.")
+STR_NOT_IMPL_ENC_DEC_CPU = (
+    "CPU is not currently supported with " "encoder/decoder models."
+)
 
 # Efficiently import all enc/dec error strings
 # rather than having to import all of the above
 STR_NOT_IMPL_ENC_DEC_ERR_STRS = {
     "STR_NOT_IMPL_ENC_DEC_SWA": STR_NOT_IMPL_ENC_DEC_SWA,
     "STR_NOT_IMPL_ENC_DEC_PREFIX_CACHE": STR_NOT_IMPL_ENC_DEC_PREFIX_CACHE,
-    "STR_NOT_IMPL_ENC_DEC_CHUNKED_PREFILL":
-    STR_NOT_IMPL_ENC_DEC_CHUNKED_PREFILL,
+    "STR_NOT_IMPL_ENC_DEC_CHUNKED_PREFILL": STR_NOT_IMPL_ENC_DEC_CHUNKED_PREFILL,
     "STR_NOT_IMPL_ENC_DEC_LOGIT_SOFTCAP": STR_NOT_IMPL_ENC_DEC_LOGIT_SOFTCAP,
     "STR_NOT_IMPL_ENC_DEC_LORA": STR_NOT_IMPL_ENC_DEC_LORA,
     "STR_NOT_IMPL_ENC_DEC_PP": STR_NOT_IMPL_ENC_DEC_PP,
@@ -105,7 +125,7 @@ STR_NOT_IMPL_ENC_DEC_ERR_STRS = {
     "STR_NOT_IMPL_ENC_DEC_SPEC_DEC": STR_NOT_IMPL_ENC_DEC_SPEC_DEC,
     "STR_NOT_IMPL_ENC_DEC_BACKEND": STR_NOT_IMPL_ENC_DEC_BACKEND,
     "STR_NOT_IMPL_ENC_DEC_PROMPT_ADAPTER": STR_NOT_IMPL_ENC_DEC_PROMPT_ADAPTER,
-    "STR_NOT_IMPL_ENC_DEC_CPU": STR_NOT_IMPL_ENC_DEC_CPU
+    "STR_NOT_IMPL_ENC_DEC_CPU": STR_NOT_IMPL_ENC_DEC_CPU,
 }
 
 # Constants related to forcing the attention backend selection
@@ -148,14 +168,13 @@ TORCH_DTYPE_TO_NUMPY_DTYPE = {
     torch.int64: np.int64,
 }
 
-P = ParamSpec('P')
+P = ParamSpec("P")
 K = TypeVar("K")
 T = TypeVar("T")
 U = TypeVar("U")
 
 
-class _Sentinel:
-    ...
+class _Sentinel: ...
 
 
 ALL_PINNED_SENTINEL = _Sentinel()
@@ -207,9 +226,7 @@ class LRUCache(Generic[T]):
     def touch(self, key: Hashable) -> None:
         self.cache.move_to_end(key)
 
-    def get(self,
-            key: Hashable,
-            default_value: Optional[T] = None) -> Optional[T]:
+    def get(self, key: Hashable, default_value: Optional[T] = None) -> Optional[T]:
         value: Optional[T]
         if key in self.cache:
             value = self.cache[key]
@@ -246,10 +263,12 @@ class LRUCache(Generic[T]):
             # pop the oldest item in the cache that is not pinned
             lru_key = next(
                 (key for key in self.cache if key not in self.pinned_items),
-                ALL_PINNED_SENTINEL)
+                ALL_PINNED_SENTINEL,
+            )
             if lru_key is ALL_PINNED_SENTINEL:
-                raise RuntimeError("All items are pinned, "
-                                   "cannot remove oldest from the cache.")
+                raise RuntimeError(
+                    "All items are pinned, " "cannot remove oldest from the cache."
+                )
         else:
             lru_key = next(iter(self.cache))
         self.pop(lru_key)
@@ -258,9 +277,7 @@ class LRUCache(Generic[T]):
         while len(self.cache) > self.capacity:
             self.remove_oldest()
 
-    def pop(self,
-            key: Hashable,
-            default_value: Optional[T] = None) -> Optional[T]:
+    def pop(self, key: Hashable, default_value: Optional[T] = None) -> Optional[T]:
         run_on_remove = key in self.cache
         value: Optional[T] = self.cache.pop(key, default_value)
         # remove from pinned items
@@ -309,8 +326,7 @@ class PyObjectCache:
         return obj
 
     def reset(self):
-        """Makes all cached-objects available for the next scheduler iteration.
-        """
+        """Makes all cached-objects available for the next scheduler iteration."""
         self._index = 0
 
 
@@ -321,6 +337,7 @@ def is_hip() -> bool:
 @lru_cache(maxsize=None)
 def is_openvino() -> bool:
     from importlib.metadata import PackageNotFoundError, version
+
     try:
         return "openvino" in version("vllm")
     except PackageNotFoundError:
@@ -331,8 +348,8 @@ def is_openvino() -> bool:
 def get_max_shared_memory_bytes(gpu: int = 0) -> int:
     """Returns the maximum shared memory per thread block in bytes."""
     from vllm import _custom_ops as ops
-    max_shared_mem = (
-        ops.get_max_shared_memory_per_block_device_attribute(gpu))
+
+    max_shared_mem = ops.get_max_shared_memory_per_block_device_attribute(gpu)
     # value 0 will cause MAX_SEQ_LEN become negative and test_attention.py
     # will fail
     assert max_shared_mem > 0, "max_shared_mem can not be zero"
@@ -397,8 +414,7 @@ def make_async(func: Callable[P, T]) -> Callable[P, Awaitable[T]]:
     return _async_wrapper
 
 
-def _next_task(iterator: AsyncGenerator[T, None],
-               loop: AbstractEventLoop) -> Task:
+def _next_task(iterator: AsyncGenerator[T, None], loop: AbstractEventLoop) -> Task:
     # Can use anext() in python >= 3.10
     return loop.create_task(iterator.__anext__())  # type: ignore[arg-type]
 
@@ -459,9 +475,9 @@ async def merge_async_iterators(
     next_cancel_check: float = 0
     try:
         while awaits:
-            done, pending = await asyncio.wait(awaits.keys(),
-                                               return_when=FIRST_COMPLETED,
-                                               timeout=timeout)
+            done, pending = await asyncio.wait(
+                awaits.keys(), return_when=FIRST_COMPLETED, timeout=timeout
+            )
             if is_cancelled is not None:
                 # Check for cancellation at most once per second
                 time_now = time.time()
@@ -486,8 +502,7 @@ async def merge_async_iterators(
                 await it.aclose()
 
 
-async def collect_from_async_generator(
-        iterator: AsyncGenerator[T, None]) -> List[T]:
+async def collect_from_async_generator(iterator: AsyncGenerator[T, None]) -> List[T]:
     """Collect all items from an async generator into a list."""
     items = []
     async for item in iterator:
@@ -524,7 +539,8 @@ def get_ip() -> str:
         "Failed to get the IP address, using 0.0.0.0 by default."
         "The value can be set by the environment variable"
         " VLLM_HOST_IP or HOST_IP.",
-        stacklevel=2)
+        stacklevel=2,
+    )
     return "0.0.0.0"
 
 
@@ -557,8 +573,7 @@ def get_open_port() -> int:
                     return port
             except OSError:
                 port += 1  # Increment port number if already in use
-                logger.info("Port %d is already in use, trying port %d",
-                            port - 1, port)
+                logger.info("Port %d is already in use, trying port %d", port - 1, port)
     # try ipv4
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -585,15 +600,18 @@ def update_environment_variables(envs: Dict[str, str]):
     for k, v in envs.items():
         if k in os.environ and os.environ[k] != v:
             logger.warning(
-                "Overwriting environment variable %s "
-                "from '%s' to '%s'", k, os.environ[k], v)
+                "Overwriting environment variable %s " "from '%s' to '%s'",
+                k,
+                os.environ[k],
+                v,
+            )
         os.environ[k] = v
 
 
 def chunk_list(lst: List[T], chunk_size: int):
     """Yield successive chunk_size chunks from lst."""
     for i in range(0, len(lst), chunk_size):
-        yield lst[i:i + chunk_size]
+        yield lst[i : i + chunk_size]
 
 
 def cdiv(a: int, b: int) -> int:
@@ -611,10 +629,11 @@ def _generate_random_fp8(
     # to generate random data for fp8 data.
     # For example, s.11111.00 in fp8e5m2 format represents Inf.
     #     | E4M3        | E5M2
-    #-----|-------------|-------------------
+    # -----|-------------|-------------------
     # Inf | N/A         | s.11111.00
     # NaN | s.1111.111  | s.11111.{01,10,11}
     from vllm import _custom_ops as ops
+
     tensor_tmp = torch.empty_like(tensor, dtype=torch.float16)
     tensor_tmp.uniform_(low, high)
     ops.convert_fp8(tensor, tensor_tmp)
@@ -622,8 +641,9 @@ def _generate_random_fp8(
 
 
 def get_kv_cache_torch_dtype(
-        cache_dtype: Optional[Union[str, torch.dtype]],
-        model_dtype: Optional[Union[str, torch.dtype]] = None) -> torch.dtype:
+    cache_dtype: Optional[Union[str, torch.dtype]],
+    model_dtype: Optional[Union[str, torch.dtype]] = None,
+) -> torch.dtype:
     if isinstance(cache_dtype, str):
         if cache_dtype == "auto":
             if isinstance(model_dtype, str):
@@ -666,16 +686,15 @@ def create_kv_caches_with_random_flash(
     value_caches: List[torch.Tensor] = []
 
     for _ in range(num_layers):
-        key_value_cache = torch.empty(size=key_value_cache_shape,
-                                      dtype=torch_dtype,
-                                      device=device)
+        key_value_cache = torch.empty(
+            size=key_value_cache_shape, dtype=torch_dtype, device=device
+        )
         if cache_dtype in ["auto", "half", "bfloat16", "float"]:
             key_value_cache.uniform_(-scale, scale)
-        elif cache_dtype == 'fp8':
+        elif cache_dtype == "fp8":
             _generate_random_fp8(key_value_cache, -scale, scale)
         else:
-            raise ValueError(
-                f"Does not support key cache of type {cache_dtype}")
+            raise ValueError(f"Does not support key cache of type {cache_dtype}")
         key_caches.append(key_value_cache[:, 0])
         value_caches.append(key_value_cache[:, 1])
     return key_caches, value_caches
@@ -707,31 +726,27 @@ def create_kv_caches_with_random(
     key_cache_shape = (num_blocks, num_heads, head_size // x, block_size, x)
     key_caches: List[torch.Tensor] = []
     for _ in range(num_layers):
-        key_cache = torch.empty(size=key_cache_shape,
-                                dtype=torch_dtype,
-                                device=device)
+        key_cache = torch.empty(size=key_cache_shape, dtype=torch_dtype, device=device)
         if cache_dtype in ["auto", "half", "bfloat16", "float"]:
             key_cache.uniform_(-scale, scale)
-        elif cache_dtype == 'fp8':
+        elif cache_dtype == "fp8":
             _generate_random_fp8(key_cache, -scale, scale)
         else:
-            raise ValueError(
-                f"Does not support key cache of type {cache_dtype}")
+            raise ValueError(f"Does not support key cache of type {cache_dtype}")
         key_caches.append(key_cache)
 
     value_cache_shape = (num_blocks, num_heads, head_size, block_size)
     value_caches: List[torch.Tensor] = []
     for _ in range(num_layers):
-        value_cache = torch.empty(size=value_cache_shape,
-                                  dtype=torch_dtype,
-                                  device=device)
+        value_cache = torch.empty(
+            size=value_cache_shape, dtype=torch_dtype, device=device
+        )
         if cache_dtype in ["auto", "half", "bfloat16", "float"]:
             value_cache.uniform_(-scale, scale)
-        elif cache_dtype == 'fp8':
+        elif cache_dtype == "fp8":
             _generate_random_fp8(value_cache, -scale, scale)
         else:
-            raise ValueError(
-                f"Does not support value cache of type {cache_dtype}")
+            raise ValueError(f"Does not support value cache of type {cache_dtype}")
         value_caches.append(value_cache)
     return key_caches, value_caches
 
@@ -748,8 +763,10 @@ def is_pin_memory_available() -> bool:
     if in_wsl():
         # Pinning memory in WSL is not supported.
         # https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications
-        print_warning_once("Using 'pin_memory=False' as WSL is detected. "
-                           "This may slow down the performance.")
+        print_warning_once(
+            "Using 'pin_memory=False' as WSL is detected. "
+            "This may slow down the performance."
+        )
         return False
     elif current_platform.is_xpu():
         print_warning_once("Pin memory is not supported on XPU.")
@@ -810,7 +827,7 @@ def make_ndarray_with_pad(
     padded_x = np.full((len(x), max_len), pad, dtype=dtype)
     for ind, blocktb in enumerate(x):
         assert len(blocktb) <= max_len
-        padded_x[ind, :len(blocktb)] = blocktb
+        padded_x[ind, : len(blocktb)] = blocktb
 
     return padded_x
 
@@ -874,8 +891,9 @@ def is_list_of(
     assert_never(check)
 
 
-JSONTree = Union[Dict[str, "JSONTree[T]"], List["JSONTree[T]"],
-                 Tuple["JSONTree[T]", ...], T]
+JSONTree = Union[
+    Dict[str, "JSONTree[T]"], List["JSONTree[T]"], Tuple["JSONTree[T]", ...], T
+]
 """A nested JSON structure where the leaves need not be JSON-serializable."""
 
 
@@ -883,32 +901,28 @@ JSONTree = Union[Dict[str, "JSONTree[T]"], List["JSONTree[T]"],
 def json_map_leaves(
     func: Callable[[T], U],
     value: Dict[str, JSONTree[T]],
-) -> Dict[str, JSONTree[U]]:
-    ...
+) -> Dict[str, JSONTree[U]]: ...
 
 
 @overload
 def json_map_leaves(
     func: Callable[[T], U],
     value: List[JSONTree[T]],
-) -> List[JSONTree[U]]:
-    ...
+) -> List[JSONTree[U]]: ...
 
 
 @overload
 def json_map_leaves(
     func: Callable[[T], U],
     value: Tuple[JSONTree[T], ...],
-) -> Tuple[JSONTree[U], ...]:
-    ...
+) -> Tuple[JSONTree[U], ...]: ...
 
 
 @overload
 def json_map_leaves(
     func: Callable[[T], U],
     value: JSONTree[T],
-) -> JSONTree[U]:
-    ...
+) -> JSONTree[U]: ...
 
 
 def json_map_leaves(func: Callable[[T], U], value: JSONTree[T]) -> JSONTree[U]:
@@ -934,6 +948,7 @@ def init_cached_hf_modules() -> None:
     Lazy initialization of the Hugging Face modules.
     """
     from transformers.dynamic_module_utils import init_hf_modules
+
     init_hf_modules()
 
 
@@ -977,8 +992,8 @@ def find_nccl_library() -> str:
     # manually load the nccl library
     if so_file:
         logger.info(
-            "Found nccl from environment variable VLLM_NCCL_SO_PATH=%s",
-            so_file)
+            "Found nccl from environment variable VLLM_NCCL_SO_PATH=%s", so_file
+        )
     else:
         if torch.version.cuda is not None:
             so_file = "libnccl.so.2"
@@ -997,11 +1012,12 @@ def enable_trace_function_call_for_thread() -> None:
 
     if envs.VLLM_TRACE_FUNCTION:
         tmp_dir = tempfile.gettempdir()
-        filename = (f"VLLM_TRACE_FUNCTION_for_process_{os.getpid()}"
-                    f"_thread_{threading.get_ident()}_"
-                    f"at_{datetime.datetime.now()}.log").replace(" ", "_")
-        log_path = os.path.join(tmp_dir, "vllm", get_vllm_instance_id(),
-                                filename)
+        filename = (
+            f"VLLM_TRACE_FUNCTION_for_process_{os.getpid()}"
+            f"_thread_{threading.get_ident()}_"
+            f"at_{datetime.datetime.now()}.log"
+        ).replace(" ", "_")
+        log_path = os.path.join(tmp_dir, "vllm", get_vllm_instance_id(), filename)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         enable_trace_function_call(log_path)
 
@@ -1011,7 +1027,7 @@ def identity(value: T) -> T:
     return value
 
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def deprecate_args(
@@ -1030,18 +1046,17 @@ def deprecate_args(
             inspect.Parameter.POSITIONAL_ONLY,
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
         )
-        pos_kws = [
-            kw for kw, param in params.items() if param.kind in pos_types
-        ]
+        pos_kws = [kw for kw, param in params.items() if param.kind in pos_types]
 
         @wraps(fn)
         def inner(*args, **kwargs):
             if is_deprecated():
-                deprecated_args = pos_kws[start_index:len(args)]
+                deprecated_args = pos_kws[start_index : len(args)]
                 if deprecated_args:
                     msg = (
                         f"The positional arguments {deprecated_args} are "
-                        "deprecated and will be removed in a future update.")
+                        "deprecated and will be removed in a future update."
+                    )
                     if additional_message is not None:
                         msg += f" {additional_message}"
 
@@ -1076,7 +1091,8 @@ def deprecate_kwargs(
                 if deprecated_kwargs:
                     msg = (
                         f"The keyword arguments {deprecated_kwargs} are "
-                        "deprecated and will be removed in a future update.")
+                        "deprecated and will be removed in a future update."
+                    )
                     if additional_message is not None:
                         msg += f" {additional_message}"
 
@@ -1093,8 +1109,7 @@ def deprecate_kwargs(
 
 
 @lru_cache(maxsize=8)
-def _cuda_device_count_stateless(
-        cuda_visible_devices: Optional[str] = None) -> int:
+def _cuda_device_count_stateless(cuda_visible_devices: Optional[str] = None) -> int:
     # Note: cuda_visible_devices is not used, but we keep it as an argument for
     # LRU Cache purposes.
 
@@ -1110,8 +1125,11 @@ def _cuda_device_count_stateless(
     if is_hip():
         # ROCm uses amdsmi instead of nvml for stateless device count
         # This requires a sufficiently modern version of Torch 2.4.0
-        raw_count = torch.cuda._device_count_amdsmi() if (hasattr(
-            torch.cuda, "_device_count_amdsmi")) else -1
+        raw_count = (
+            torch.cuda._device_count_amdsmi()
+            if (hasattr(torch.cuda, "_device_count_amdsmi"))
+            else -1
+        )
     else:
         raw_count = torch.cuda._device_count_nvml()
     r = torch._C._cuda_getDeviceCount() if raw_count < 0 else raw_count
@@ -1138,7 +1156,9 @@ def cuda_is_initialized() -> bool:
     return torch.cuda.is_initialized()
 
 
-def weak_bind(bound_method: Callable[..., Any], ) -> Callable[..., None]:
+def weak_bind(
+    bound_method: Callable[..., Any],
+) -> Callable[..., None]:
     """Make an instance method that weakly references
     its associated instance and no-ops once that
     instance is collected."""
@@ -1152,7 +1172,7 @@ def weak_bind(bound_method: Callable[..., Any], ) -> Callable[..., None]:
     return weak_bound
 
 
-#From: https://stackoverflow.com/a/4104188/2749989
+# From: https://stackoverflow.com/a/4104188/2749989
 def run_once(f: Callable[P, None]) -> Callable[P, None]:
 
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> None:
@@ -1171,20 +1191,19 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
         if args is None:
             args = sys.argv[1:]
 
-        if '--config' in args:
+        if "--config" in args:
             args = FlexibleArgumentParser._pull_args_from_config(args)
 
         # Convert underscores to dashes and vice versa in argument names
         processed_args = []
         for arg in args:
-            if arg.startswith('--'):
-                if '=' in arg:
-                    key, value = arg.split('=', 1)
-                    key = '--' + key[len('--'):].replace('_', '-')
-                    processed_args.append(f'{key}={value}')
+            if arg.startswith("--"):
+                if "=" in arg:
+                    key, value = arg.split("=", 1)
+                    key = "--" + key[len("--") :].replace("_", "-")
+                    processed_args.append(f"{key}={value}")
                 else:
-                    processed_args.append('--' +
-                                          arg[len('--'):].replace('_', '-'))
+                    processed_args.append("--" + arg[len("--") :].replace("_", "-"))
             else:
                 processed_args.append(arg)
 
@@ -1225,13 +1244,14 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
         this way the order of priorities is maintained when these are args
         parsed by super().
         """
-        assert args.count(
-            '--config') <= 1, "More than one config file specified!"
+        assert args.count("--config") <= 1, "More than one config file specified!"
 
-        index = args.index('--config')
+        index = args.index("--config")
         if index == len(args) - 1:
-            raise ValueError("No config file specified! \
-                             Please check your command-line arguments.")
+            raise ValueError(
+                "No config file specified! \
+                             Please check your command-line arguments."
+            )
 
         file_path = args[index + 1]
 
@@ -1247,12 +1267,13 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
             if index == 1:
                 raise ValueError(
                     "No model_tag specified! Please check your command-line"
-                    " arguments.")
-            args = [args[0]] + [
-                args[1]
-            ] + config_args + args[2:index] + args[index + 2:]
+                    " arguments."
+                )
+            args = (
+                [args[0]] + [args[1]] + config_args + args[2:index] + args[index + 2 :]
+            )
         else:
-            args = [args[0]] + config_args + args[1:index] + args[index + 2:]
+            args = [args[0]] + config_args + args[1:index] + args[index + 2 :]
 
         return args
 
@@ -1272,34 +1293,37 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
 
         """
 
-        extension: str = file_path.split('.')[-1]
-        if extension not in ('yaml', 'yml'):
+        extension: str = file_path.split(".")[-1]
+        if extension not in ("yaml", "yml"):
             raise ValueError(
                 "Config file must be of a yaml/yml type.\
-                              %s supplied", extension)
+                              %s supplied",
+                extension,
+            )
 
         # only expecting a flat dictionary of atomic types
         processed_args: List[str] = []
 
         config: Dict[str, Union[int, str]] = {}
         try:
-            with open(file_path, 'r') as config_file:
+            with open(file_path, "r") as config_file:
                 config = yaml.safe_load(config_file)
         except Exception as ex:
             logger.error(
                 "Unable to read the config file at %s. \
-                Make sure path is correct", file_path)
+                Make sure path is correct",
+                file_path,
+            )
             raise ex
 
         for key, value in config.items():
-            processed_args.append('--' + key)
+            processed_args.append("--" + key)
             processed_args.append(str(value))
 
         return processed_args
 
 
-async def _run_task_with_lock(task: Callable, lock: asyncio.Lock, *args,
-                              **kwargs):
+async def _run_task_with_lock(task: Callable, lock: asyncio.Lock, *args, **kwargs):
     """Utility function to run async task in a lock"""
     async with lock:
         return await task(*args, **kwargs)
@@ -1321,19 +1345,26 @@ def supports_kw(
     param_val = params.get(kw_name)
 
     # Types where the it may be valid, i.e., explicitly defined & nonvariadic
-    passable_kw_types = set((inspect.Parameter.POSITIONAL_ONLY,
-                             inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                             inspect.Parameter.KEYWORD_ONLY))
+    passable_kw_types = set(
+        (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
+    )
 
     if param_val:
         is_sig_param = param_val.kind in passable_kw_types
         # We want kwargs only, but this is passable as a positional arg
-        if (requires_kw_only and is_sig_param
-                and param_val.kind != inspect.Parameter.KEYWORD_ONLY):
+        if (
+            requires_kw_only
+            and is_sig_param
+            and param_val.kind != inspect.Parameter.KEYWORD_ONLY
+        ):
             return False
-        if ((requires_kw_only
-             and param_val.kind == inspect.Parameter.KEYWORD_ONLY)
-                or (not requires_kw_only and is_sig_param)):
+        if (requires_kw_only and param_val.kind == inspect.Parameter.KEYWORD_ONLY) or (
+            not requires_kw_only and is_sig_param
+        ):
             return True
 
     # If we're okay with var-kwargs, it's supported as long as
@@ -1343,8 +1374,10 @@ def supports_kw(
         # mapping, but it wraps an ordered dict, and they appear in order.
         # Ref: https://docs.python.org/3/library/inspect.html#inspect.Signature.parameters
         last_param = params[next(reversed(params))]  # type: ignore
-        return (last_param.kind == inspect.Parameter.VAR_KEYWORD
-                and last_param.name != kw_name)
+        return (
+            last_param.kind == inspect.Parameter.VAR_KEYWORD
+            and last_param.name != kw_name
+        )
     return False
 
 
@@ -1368,13 +1401,13 @@ def resolve_mm_processor_kwargs(
     """
     # Filter inference time multimodal processor kwargs provided
     runtime_mm_kwargs = get_allowed_kwarg_only_overrides(
-        callable,
-        overrides=inference_kwargs,
-        allow_var_kwargs=allow_var_kwargs)
+        callable, overrides=inference_kwargs, allow_var_kwargs=allow_var_kwargs
+    )
 
     # Filter init time multimodal processor kwargs provided
     init_mm_kwargs = get_allowed_kwarg_only_overrides(
-        callable, overrides=init_kwargs, allow_var_kwargs=allow_var_kwargs)
+        callable, overrides=init_kwargs, allow_var_kwargs=allow_var_kwargs
+    )
 
     # Merge the final processor kwargs, prioritizing inference
     # time values over the initialization time values.
@@ -1414,10 +1447,12 @@ def get_allowed_kwarg_only_overrides(
     filtered_overrides = {
         kwarg_name: val
         for kwarg_name, val in overrides.items()
-        if supports_kw(callable,
-                       kwarg_name,
-                       requires_kw_only=True,
-                       allow_var_kwargs=allow_var_kwargs)
+        if supports_kw(
+            callable,
+            kwarg_name,
+            requires_kw_only=True,
+            allow_var_kwargs=allow_var_kwargs,
+        )
     }
 
     # If anything is dropped, log a warning
@@ -1425,7 +1460,9 @@ def get_allowed_kwarg_only_overrides(
     if dropped_keys:
         logger.warning(
             "The following intended overrides are not keyword-only args "
-            "and and will be dropped: %s", dropped_keys)
+            "and and will be dropped: %s",
+            dropped_keys,
+        )
 
     return filtered_overrides
 

@@ -17,6 +17,7 @@ class AllocStatus(enum.Enum):
     3. Never: seq_group can never be allocated.
       The seq_group is too large to allocated in GPU.
     """
+
     OK = enum.auto()
     LATER = enum.auto()
     NEVER = enum.auto()
@@ -30,19 +31,22 @@ class BlockSpaceManager(ABC):
 
         if version == "selfattn":
             from vllm.core.block_manager import SelfAttnBlockSpaceManager
+
             return SelfAttnBlockSpaceManager
 
         if version == "placeholder":
             from vllm.core.placeholder_block_space_manager import (
-                PlaceholderBlockSpaceManager)
+                PlaceholderBlockSpaceManager,
+            )
+
             return PlaceholderBlockSpaceManager
 
         raise ValueError(f"Unknown version {version=}")
 
     @abstractmethod
-    def can_allocate(self,
-                     seq_group: SequenceGroup,
-                     num_lookahead_slots: int = 0) -> AllocStatus:
+    def can_allocate(
+        self, seq_group: SequenceGroup, num_lookahead_slots: int = 0
+    ) -> AllocStatus:
         pass
 
     @abstractmethod
@@ -50,8 +54,9 @@ class BlockSpaceManager(ABC):
         pass
 
     @abstractmethod
-    def can_append_slots(self, seq_group: SequenceGroup,
-                         num_lookahead_slots: int) -> bool:
+    def can_append_slots(
+        self, seq_group: SequenceGroup, num_lookahead_slots: int
+    ) -> bool:
         pass
 
     @abstractmethod
@@ -67,8 +72,9 @@ class BlockSpaceManager(ABC):
         pass
 
     @abstractmethod
-    def can_swap_in(self, seq_group: SequenceGroup,
-                    num_lookahead_slots: int) -> AllocStatus:
+    def can_swap_in(
+        self, seq_group: SequenceGroup, num_lookahead_slots: int
+    ) -> AllocStatus:
         pass
 
     @abstractmethod
@@ -109,12 +115,12 @@ class BlockSpaceManager(ABC):
 
     @abstractmethod
     def get_common_computed_block_ids(
-            self, seqs: List[Sequence]) -> GenericSequence[int]:
+        self, seqs: List[Sequence]
+    ) -> GenericSequence[int]:
         pass
 
     @abstractmethod
-    def mark_blocks_as_computed(self, seq_group: SequenceGroup,
-                                token_chunk_size: int):
+    def mark_blocks_as_computed(self, seq_group: SequenceGroup, token_chunk_size: int):
         pass
 
     @abstractmethod

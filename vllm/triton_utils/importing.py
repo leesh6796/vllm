@@ -12,5 +12,7 @@ HAS_TRITON = (
 )
 
 if not HAS_TRITON:
-    logger.info("Triton not installed or not compatible; certain GPU-related"
-                " functions will not be available.")
+    logger.info(
+        "Triton not installed or not compatible; certain GPU-related"
+        " functions will not be available."
+    )

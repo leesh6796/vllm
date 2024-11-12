@@ -34,13 +34,13 @@ class Scheduler:
             block_size=self.cache_config.block_size,
             num_gpu_blocks=num_gpu_blocks,
             sliding_window=self.cache_config.sliding_window,
-            enable_caching=True)
+            enable_caching=True,
+        )
         self.block_size = self.cache_config.block_size
 
         # Scheduling constraints.
         self.max_num_running_reqs = self.scheduler_config.max_num_seqs
-        self.max_num_scheduled_tokens = \
-            self.scheduler_config.max_num_batched_tokens
+        self.max_num_scheduled_tokens = self.scheduler_config.max_num_batched_tokens
         self.max_model_len = self.scheduler_config.max_model_len
 
         # req_id -> Request
@@ -92,7 +92,8 @@ class Scheduler:
 
             while True:
                 new_block_ids = self.kv_cache_manager.append_slots(
-                    request, num_new_tokens)
+                    request, num_new_tokens
+                )
                 if new_block_ids is None:
                     # The request cannot be scheduled.
                     # Preempt the lowest-priority request.
@@ -126,8 +127,7 @@ class Scheduler:
 
                 request = self.waiting[0]
                 # Get already-cached tokens.
-                computed_block_ids = self.kv_cache_manager.get_computed_blocks(
-                    request)
+                computed_block_ids = self.kv_cache_manager.get_computed_blocks(request)
                 # NOTE(woosuk): Since incomplete blocks are not eligible for
                 # sharing, `num_computed_tokens` is always a multiple of
                 # `block_size`.
@@ -140,7 +140,8 @@ class Scheduler:
                 num_new_tokens = min(num_new_tokens, token_budget)
                 assert num_new_tokens > 0
                 new_block_ids = self.kv_cache_manager.allocate_slots(
-                    request, num_new_tokens, computed_block_ids)
+                    request, num_new_tokens, computed_block_ids
+                )
                 if new_block_ids is None:
                     # The request cannot be scheduled.
                     break
@@ -153,11 +154,11 @@ class Scheduler:
                 elif request.status == RequestStatus.PREEMPTED:
                     scheduled_resumed_reqs.append(request)
                 else:
-                    raise RuntimeError(
-                        f"Invalid request status: {request.status}")
+                    raise RuntimeError(f"Invalid request status: {request.status}")
 
                 req_to_new_block_ids[request.request_id] = (
-                    computed_block_ids + new_block_ids)
+                    computed_block_ids + new_block_ids
+                )
                 num_scheduled_tokens[request.request_id] = num_new_tokens
                 token_budget -= num_new_tokens
                 request.status = RequestStatus.RUNNING
@@ -167,25 +168,28 @@ class Scheduler:
         assert total_num_scheduled_tokens <= self.max_num_scheduled_tokens
         assert token_budget >= 0
         assert len(self.running) <= self.max_num_running_reqs
-        assert (len(scheduled_new_reqs) + len(scheduled_resumed_reqs) +
-                len(scheduled_running_reqs) == len(self.running))
+        assert len(scheduled_new_reqs) + len(scheduled_resumed_reqs) + len(
+            scheduled_running_reqs
+        ) == len(self.running)
 
         # Construct the scheduler output.
         new_reqs_data = [
-            NewRequestData.from_request(req,
-                                        req_to_new_block_ids[req.request_id],
-                                        req.num_computed_tokens)
+            NewRequestData.from_request(
+                req, req_to_new_block_ids[req.request_id], req.num_computed_tokens
+            )
             for req in scheduled_new_reqs
         ]
         resumed_reqs_data = [
             ResumedRequestData.from_request(
-                req, req_to_new_block_ids[req.request_id],
-                req.num_computed_tokens) for req in scheduled_resumed_reqs
+                req, req_to_new_block_ids[req.request_id], req.num_computed_tokens
+            )
+            for req in scheduled_resumed_reqs
         ]
         running_reqs_data = [
             self._make_running_request_data(
-                req, req_to_new_block_ids[req.request_id],
-                req.num_computed_tokens) for req in scheduled_running_reqs
+                req, req_to_new_block_ids[req.request_id], req.num_computed_tokens
+            )
+            for req in scheduled_running_reqs
         ]
         preempted_req_ids = {req.request_id for req in preempted_reqs}
         scheduler_output = SchedulerOutput(
@@ -218,8 +222,9 @@ class Scheduler:
             req_data.new_block_ids = new_block_ids
             req_data.num_computed_tokens = num_computed_tokens
         else:
-            req_data = RunningRequestData.from_request(request, new_block_ids,
-                                                       num_computed_tokens)
+            req_data = RunningRequestData.from_request(
+                request, new_block_ids, num_computed_tokens
+            )
             self.running_reqs_data[request.request_id] = req_data
         return req_data
 
@@ -260,16 +265,17 @@ class Scheduler:
         return sampled
 
     def _check_stop(self, request: Request) -> bool:
-        if (request.num_tokens >= self.max_model_len
-                or request.num_output_tokens >= request.max_tokens):
+        if (
+            request.num_tokens >= self.max_model_len
+            or request.num_output_tokens >= request.max_tokens
+        ):
             request.status = RequestStatus.FINISHED_LENGTH_CAPPED
             self._free_request(request)
             return True
 
         sampling_params = request.sampling_params
         last_token_id = request.output_token_ids[-1]
-        if (not sampling_params.ignore_eos
-                and last_token_id == request.eos_token_id):
+        if not sampling_params.ignore_eos and last_token_id == request.eos_token_id:
             request.status = RequestStatus.FINISHED_STOPPED
             self._free_request(request)
             return True
@@ -297,7 +303,7 @@ class Scheduler:
         """
         assert RequestStatus.is_finished(finished_status)
         if isinstance(request_ids, str):
-            request_ids = (request_ids, )
+            request_ids = (request_ids,)
         request_ids = set(request_ids)
 
         for req_id in request_ids:

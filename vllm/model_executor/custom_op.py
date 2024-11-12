@@ -66,8 +66,9 @@ class CustomOp(nn.Module):
         # specific backend. Currently, we do not support dynamic dispatching.
 
         enabled = self.enabled()
-        logger.debug("custom op %s %s", self.__class__.name,
-                     "enabled" if enabled else "disabled")
+        logger.debug(
+            "custom op %s %s", self.__class__.name, "enabled" if enabled else "disabled"
+        )
 
         if not enabled:
             return self.forward_native
@@ -90,13 +91,13 @@ class CustomOp(nn.Module):
             print_warning_once(
                 f"Custom op {cls.__name__} was not registered, "
                 f"which means it won't appear in the op registry. "
-                f"It will be enabled/disabled based on the global settings.")
+                f"It will be enabled/disabled based on the global settings."
+            )
             return CustomOp.default_on()
 
         enabled = f"+{cls.name}" in envs.VLLM_CUSTOM_OPS
         disabled = f"-{cls.name}" in envs.VLLM_CUSTOM_OPS
-        assert not (enabled
-                    and disabled), f"Cannot enable and disable {cls.name}"
+        assert not (enabled and disabled), f"Cannot enable and disable {cls.name}"
 
         return (CustomOp.default_on() or enabled) and not disabled
 
@@ -108,15 +109,18 @@ class CustomOp(nn.Module):
         count_none = envs.VLLM_CUSTOM_OPS.count("none")
         count_all = envs.VLLM_CUSTOM_OPS.count("all")
         assert count_none + count_all <= 1, "Can only specify 'none' or 'all'"
-        return envs.VLLM_TORCH_COMPILE_LEVEL < CompilationLevel.INDUCTOR and \
-            not count_none > 0 or count_all > 0
+        return (
+            envs.VLLM_TORCH_COMPILE_LEVEL < CompilationLevel.INDUCTOR
+            and not count_none > 0
+            or count_all > 0
+        )
 
     # Dictionary of all custom ops (classes, indexed by registered name).
     # To check if an op with a name is enabled, call .enabled() on the class.
     # Examples:
     # - MyOp.enabled()
     # - op_registry["my_op"].enabled()
-    op_registry: Dict[str, Type['CustomOp']] = {}
+    op_registry: Dict[str, Type["CustomOp"]] = {}
 
     # Decorator to register custom ops.
     @classmethod

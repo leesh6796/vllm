@@ -9,8 +9,7 @@ from vllm.inputs.data import PromptType, TokensPrompt
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor.layers.sampler import SamplerOutput
-from vllm.outputs import (CompletionOutput, EmbeddingRequestOutput,
-                          RequestOutput)
+from vllm.outputs import CompletionOutput, EmbeddingRequestOutput, RequestOutput
 from vllm.pooling_params import PoolingParams
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sampling_params import BeamSearchParams, SamplingParams
@@ -25,23 +24,19 @@ class EngineClient(ABC):
 
     @property
     @abstractmethod
-    def is_running(self) -> bool:
-        ...
+    def is_running(self) -> bool: ...
 
     @property
     @abstractmethod
-    def is_stopped(self) -> bool:
-        ...
+    def is_stopped(self) -> bool: ...
 
     @property
     @abstractmethod
-    def errored(self) -> bool:
-        ...
+    def errored(self) -> bool: ...
 
     @property
     @abstractmethod
-    def dead_error(self) -> BaseException:
-        ...
+    def dead_error(self) -> BaseException: ...
 
     @abstractmethod
     def generate(
@@ -80,22 +75,20 @@ class EngineClient(ABC):
         tokenized_length = len(tokenized_prompt)
 
         sort_beams_key = create_sort_beams_key_function(
-            tokenizer.eos_token_id, length_penalty)
+            tokenizer.eos_token_id, length_penalty
+        )
 
-        beam_search_params = SamplingParams(logprobs=2 * beam_width,
-                                            max_tokens=1,
-                                            temperature=temperature)
+        beam_search_params = SamplingParams(
+            logprobs=2 * beam_width, max_tokens=1, temperature=temperature
+        )
         all_beams = [
-            BeamSearchSequence(tokens=tokenized_prompt,
-                               logprobs=[],
-                               cum_logprob=0)
+            BeamSearchSequence(tokens=tokenized_prompt, logprobs=[], cum_logprob=0)
         ]
         completed = []
 
         for _ in range(max_tokens):
             prompts_batch = [
-                TokensPrompt(prompt_token_ids=beam.tokens)
-                for beam in all_beams
+                TokensPrompt(prompt_token_ids=beam.tokens) for beam in all_beams
             ]
 
             tasks = []
@@ -105,8 +98,11 @@ class EngineClient(ABC):
                 request_id_item = f"{request_id}-{i}"
                 task = asyncio.create_task(
                     collect_from_async_generator(
-                        self.generate(individual_prompt, beam_search_params,
-                                      request_id_item)))
+                        self.generate(
+                            individual_prompt, beam_search_params, request_id_item
+                        )
+                    )
+                )
                 tasks.append(task)
 
             output = await asyncio.gather(*tasks)
@@ -123,11 +119,10 @@ class EngineClient(ABC):
                         new_beam = BeamSearchSequence(
                             tokens=current_beam.tokens + [token_id],
                             logprobs=current_beam.logprobs + [logprobs],
-                            cum_logprob=current_beam.cum_logprob +
-                            logprob_obj.logprob)
+                            cum_logprob=current_beam.cum_logprob + logprob_obj.logprob,
+                        )
 
-                        if token_id == tokenizer.eos_token_id and \
-                            not ignore_eos:
+                        if token_id == tokenizer.eos_token_id and not ignore_eos:
                             completed.append(new_beam)
                         else:
                             new_beams.append(new_beam)
@@ -152,11 +147,13 @@ class EngineClient(ABC):
                     token_ids=beam.tokens[tokenized_length:],
                     index=i,
                     logprobs=beam.logprobs,
-                ) for (i, beam) in enumerate(best_beams)
+                )
+                for (i, beam) in enumerate(best_beams)
             ],
             finished=True,
             prompt_token_ids=tokenized_prompt,
-            prompt_logprobs=None)
+            prompt_logprobs=None,
+        )
 
         yield beam_search_output
 
@@ -200,16 +197,14 @@ class EngineClient(ABC):
         ...
 
     @abstractmethod
-    async def is_tracing_enabled(self) -> bool:
-        ...
+    async def is_tracing_enabled(self) -> bool: ...
 
     @abstractmethod
     async def do_log_stats(
         self,
         scheduler_outputs: Optional[SchedulerOutputs] = None,
         model_output: Optional[List[SamplerOutput]] = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @abstractmethod
     async def check_health(self) -> None:

@@ -35,15 +35,18 @@ class TorchCompileWrapperWithCustomDispatcher:
 
             # if the user has set the backend, use it
             from vllm.plugins import get_torch_compile_backend
+
             backend = get_torch_compile_backend()
             if backend is None:
                 from vllm.compilation.backends import select_default_backend
+
                 backend = select_default_backend(envs.VLLM_TORCH_COMPILE_LEVEL)
 
             compiled_callable = torch.compile(
                 self.forward,
                 fullgraph=envs.VLLM_TEST_DYNAMO_FULLGRAPH_CAPTURE,
-                backend=backend)
+                backend=backend,
+            )
 
         self.compiled_callable = compiled_callable
         self.original_code_object = self.__class__.forward.__code__
@@ -53,8 +56,9 @@ class TorchCompileWrapperWithCustomDispatcher:
         # read the env var to determine whether to use the custom dispatcher
         # subclasses can use this to switch between the custom dispatcher
         # and the default Dynamo guard mechanism.
-        self.use_custom_dispatcher: bool = \
+        self.use_custom_dispatcher: bool = (
             envs.VLLM_TORCH_COMPILE_LEVEL >= CompilationLevel.DYNAMO_ONCE
+        )
 
     def __call__(self, *args, **kwargs):
         """Implement the dispatch logic here, beyond the torch.compile level.
@@ -64,8 +68,7 @@ class TorchCompileWrapperWithCustomDispatcher:
         return self.compiled_callable(*args, **kwargs)
 
     @abstractmethod
-    def forward(self, *args, **kwargs):
-        ...
+    def forward(self, *args, **kwargs): ...
 
     def bytecode_hook(self, old_code: CodeType, new_code: CodeType):
         """Hook to save the compiled bytecode for direct execution."""
@@ -96,7 +99,7 @@ class TorchCompileWrapperWithCustomDispatcher:
         the code object in the function and call it.
 
         See https://dev-discuss.pytorch.org/t/what-is-the-relationship-requirement-among-original-bytecode-transformed-bytecode-and-bytecode-returned-by-hooks-in-dynamo/1693/7 for more details.
-        """ # noqa
+        """  # noqa
         self.__class__.forward.__code__ = self.compiled_codes[index]
         yield
         self.__class__.forward.__code__ = self.original_code_object

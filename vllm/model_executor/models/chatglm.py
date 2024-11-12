@@ -14,40 +14,44 @@ from torch.nn import LayerNorm
 from vllm.attention import Attention, AttentionMetadata
 from vllm.config import CacheConfig, LoRAConfig, MultiModalConfig
 from vllm.distributed import get_pp_group, get_tensor_model_parallel_world_size
-from vllm.inputs import (INPUT_REGISTRY, DecoderOnlyInputs, InputContext,
-                         token_inputs)
+from vllm.inputs import INPUT_REGISTRY, DecoderOnlyInputs, InputContext, token_inputs
 from vllm.logger import init_logger
 from vllm.model_executor.layers.activation import SiluAndMul
 from vllm.model_executor.layers.layernorm import RMSNorm
-from vllm.model_executor.layers.linear import (MergedColumnParallelLinear,
-                                               QKVParallelLinear,
-                                               RowParallelLinear)
+from vllm.model_executor.layers.linear import (
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
+    RowParallelLinear,
+)
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.sampler import Sampler, SamplerOutput
 from vllm.model_executor.layers.vocab_parallel_embedding import (
-    ParallelLMHead, VocabParallelEmbedding)
+    ParallelLMHead,
+    VocabParallelEmbedding,
+)
 from vllm.model_executor.model_loader.weight_utils import default_weight_loader
 from vllm.model_executor.models.glm4_vision_encoder import EVA2CLIPModel
 from vllm.model_executor.sampling_metadata import SamplingMetadata
-from vllm.multimodal import (MULTIMODAL_REGISTRY, MultiModalDataDict,
-                             MultiModalInputs)
+from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalDataDict, MultiModalInputs
 from vllm.multimodal.base import MultiModalData
 from vllm.multimodal.utils import cached_get_tokenizer
-from vllm.sequence import (VLLM_TOKEN_ID_ARRAY_TYPE, IntermediateTensors,
-                           SequenceData)
+from vllm.sequence import VLLM_TOKEN_ID_ARRAY_TYPE, IntermediateTensors, SequenceData
 from vllm.transformers_utils.configs import ChatGLMConfig
 
 from .interfaces import SupportsLoRA, SupportsMultiModal, SupportsPP
-from .utils import (is_pp_missing_parameter,
-                    make_empty_intermediate_tensors_factory, make_layers)
+from .utils import (
+    is_pp_missing_parameter,
+    make_empty_intermediate_tensors_factory,
+    make_layers,
+)
 
 logger = init_logger(__name__)
 
 
 def calculate_image_placeholder(vision_config):
-    return (vision_config["image_size"] // vision_config["patch_size"] // 2)**2
+    return (vision_config["image_size"] // vision_config["patch_size"] // 2) ** 2
 
 
 def mm_input_mapper_for_glmv(
@@ -55,27 +59,25 @@ def mm_input_mapper_for_glmv(
     data: MultiModalData[object],
 ) -> Dict:
     model_config = ctx.model_config
-    tokenizer = cached_get_tokenizer(model_config.tokenizer,
-                                     trust_remote_code=True)
+    tokenizer = cached_get_tokenizer(model_config.tokenizer, trust_remote_code=True)
     if tokenizer is None:
-        raise RuntimeError("No HuggingFace processor is available "
-                           "to process the image object")
+        raise RuntimeError(
+            "No HuggingFace processor is available " "to process the image object"
+        )
     try:
         raw_batch_data = tokenizer.apply_chat_template(
-            conversation=[{
-                "role": "user",
-                "image": data
-            }],
+            conversation=[{"role": "user", "image": data}],
             add_generation_prompt=True,
             tokenize=True,
             return_tensors="pt",
-            return_dict=True).data
+            return_dict=True,
+        ).data
     except Exception:
         logger.error("Failed to process image (%s)", data)
         raise
-    pixel_values = raw_batch_data['images']
+    pixel_values = raw_batch_data["images"]
 
-    return MultiModalInputs({'pixel_values': pixel_values})
+    return MultiModalInputs({"pixel_values": pixel_values})
 
 
 def merge_glm_vision_embeddings(
@@ -93,9 +95,8 @@ def merge_glm_vision_embeddings(
 
     for boi_pos, eoi_pos in zip(boi_positions, eoi_positions):
         assert boi_pos < eoi_pos
-        mask[boi_pos:eoi_pos + 1] = True
-    inputs_embeds[mask] = vision_embeddings.view(-1,
-                                                 vision_embeddings.shape[-1])
+        mask[boi_pos : eoi_pos + 1] = True
+    inputs_embeds[mask] = vision_embeddings.view(-1, vision_embeddings.shape[-1])
     return inputs_embeds
 
 
@@ -107,7 +108,7 @@ class GLMImagePixelInputs(TypedDict):
 def get_max_glmv_image_tokens(ctx: InputContext):
     hf_config = ctx.get_hf_config(ChatGLMConfig)
 
-    vision_config = getattr(hf_config, 'vision_config', None)
+    vision_config = getattr(hf_config, "vision_config", None)
     if vision_config is None:
         return 1
     elif isinstance(vision_config, dict):
@@ -121,7 +122,7 @@ def dummy_data_for_glmv(
     ctx: InputContext, seq_len: int, mm_counts: Mapping[str, int]
 ) -> Tuple[SequenceData, Optional[MultiModalDataDict]]:
     hf_config = ctx.get_hf_config(ChatGLMConfig)
-    vision_config = getattr(hf_config, 'vision_config', None)
+    vision_config = getattr(hf_config, "vision_config", None)
 
     if vision_config is None:
         token_ids = array(VLLM_TOKEN_ID_ARRAY_TYPE, [0] * seq_len)
@@ -130,16 +131,18 @@ def dummy_data_for_glmv(
     elif isinstance(vision_config, dict):
         image_size = vision_config["image_size"]
         image_placeholder_length = calculate_image_placeholder(vision_config)
-        token_ids = array(VLLM_TOKEN_ID_ARRAY_TYPE, [hf_config.boi_token_id] +
-                          [0] * image_placeholder_length +
-                          [hf_config.eoi_token_id])
-        token_ids += array(VLLM_TOKEN_ID_ARRAY_TYPE,
-                           [0] * (seq_len - image_placeholder_length - 2))
+        token_ids = array(
+            VLLM_TOKEN_ID_ARRAY_TYPE,
+            [hf_config.boi_token_id]
+            + [0] * image_placeholder_length
+            + [hf_config.eoi_token_id],
+        )
+        token_ids += array(
+            VLLM_TOKEN_ID_ARRAY_TYPE, [0] * (seq_len - image_placeholder_length - 2)
+        )
         seq_data = SequenceData(token_ids)
 
-        mm_data = {
-            "image": Image.new("RGB", (image_size, image_size), color=0)
-        }
+        mm_data = {"image": Image.new("RGB", (image_size, image_size), color=0)}
 
         return seq_data, mm_data
 
@@ -157,7 +160,7 @@ def input_processor_for_glmv(ctx: InputContext, inputs: DecoderOnlyInputs):
         return inputs
 
     hf_config = ctx.get_hf_config(ChatGLMConfig)
-    vision_config = getattr(hf_config, 'vision_config', None)
+    vision_config = getattr(hf_config, "vision_config", None)
 
     if vision_config is None:
         return inputs
@@ -170,25 +173,27 @@ def input_processor_for_glmv(ctx: InputContext, inputs: DecoderOnlyInputs):
     input_ids = inputs["prompt_token_ids"]
 
     tokenizer = cached_get_tokenizer(
-        ctx.model_config.model,
-        trust_remote_code=ctx.model_config.trust_remote_code)
+        ctx.model_config.model, trust_remote_code=ctx.model_config.trust_remote_code
+    )
 
     try:
         raw_batch_data = tokenizer.apply_chat_template(
-            conversation=[{
-                "role": "user",
-                "image": multi_modal_data["image"],
-                "content": inputs['prompt'],
-            }],
+            conversation=[
+                {
+                    "role": "user",
+                    "image": multi_modal_data["image"],
+                    "content": inputs["prompt"],
+                }
+            ],
             add_generation_prompt=True,
             tokenize=True,
             return_tensors="pt",
             return_dict=True,
         ).data
     except Exception:
-        logger.error("Failed to process content (%s)", inputs['prompt'])
+        logger.error("Failed to process content (%s)", inputs["prompt"])
         raise
-    input_ids = raw_batch_data['input_ids'][0].tolist()
+    input_ids = raw_batch_data["input_ids"][0].tolist()
 
     boi_token_id = hf_config.boi_token_id
     eoi_token_id = hf_config.eoi_token_id
@@ -203,10 +208,8 @@ def input_processor_for_glmv(ctx: InputContext, inputs: DecoderOnlyInputs):
 
     for boi_position, eoi_position in zip(boi_positions, eoi_positions):
         assert boi_position < eoi_position
-        new_input_ids.extend(input_ids[final_processed_position:boi_position +
-                                       1])
-        new_input_ids.extend([input_ids[boi_position + 1]] *
-                             image_placeholder_length)
+        new_input_ids.extend(input_ids[final_processed_position : boi_position + 1])
+        new_input_ids.extend([input_ids[boi_position + 1]] * image_placeholder_length)
         final_processed_position = eoi_position
 
     new_input_ids.extend(input_ids[final_processed_position:])
@@ -237,9 +240,11 @@ class GLMAttention(nn.Module):
         assert self.total_num_heads % tp_size == 0
         self.num_heads = self.total_num_heads // tp_size
         self.multi_query_attention = config.multi_query_attention
-        self.total_num_kv_heads = (config.multi_query_group_num
-                                   if config.multi_query_attention else
-                                   config.num_attention_heads)
+        self.total_num_kv_heads = (
+            config.multi_query_group_num
+            if config.multi_query_attention
+            else config.num_attention_heads
+        )
         if self.total_num_kv_heads >= tp_size:
             # Number of KV heads is greater than TP size, so we partition
             # the KV heads across multiple tensor parallel GPUs.
@@ -279,12 +284,14 @@ class GLMAttention(nn.Module):
             base=10000 * rope_ratio,
             is_neox_style=False,
         )
-        self.attn = Attention(self.num_heads,
-                              self.head_dim,
-                              self.scaling,
-                              num_kv_heads=self.num_kv_heads,
-                              cache_config=cache_config,
-                              quant_config=quant_config)
+        self.attn = Attention(
+            self.num_heads,
+            self.head_dim,
+            self.scaling,
+            num_kv_heads=self.num_kv_heads,
+            cache_config=cache_config,
+            quant_config=quant_config,
+        )
 
     def forward(
         self,
@@ -366,14 +373,16 @@ class GLMBlock(nn.Module):
     ):
         super().__init__()
         self.apply_residual_connection_post_layernorm = (
-            config.apply_residual_connection_post_layernorm)
+            config.apply_residual_connection_post_layernorm
+        )
 
         self.fp32_residual_connection = config.fp32_residual_connection
 
         layer_norm_func = RMSNorm if config.rmsnorm else LayerNorm
         # Layernorm on the input data.
-        self.input_layernorm = layer_norm_func(config.hidden_size,
-                                               eps=config.layernorm_epsilon)
+        self.input_layernorm = layer_norm_func(
+            config.hidden_size, eps=config.layernorm_epsilon
+        )
 
         # Self attention.
         self.self_attention = GLMAttention(config, cache_config, quant_config)
@@ -381,7 +390,8 @@ class GLMBlock(nn.Module):
 
         # Layernorm on the attention output
         self.post_attention_layernorm = layer_norm_func(
-            config.hidden_size, eps=config.layernorm_epsilon)
+            config.hidden_size, eps=config.layernorm_epsilon
+        )
 
         # MLP
         self.mlp = GLMMLP(config, quant_config)
@@ -453,11 +463,12 @@ class GLMTransformer(nn.Module):
             layer_norm_func = RMSNorm if config.rmsnorm else LayerNorm
             # Final layer norm before output.
             self.final_layernorm = layer_norm_func(
-                config.hidden_size, eps=config.layernorm_epsilon)
+                config.hidden_size, eps=config.layernorm_epsilon
+            )
 
-        self.make_empty_intermediate_tensors = (
-            make_empty_intermediate_tensors_factory(["hidden_states"],
-                                                    config.hidden_size))
+        self.make_empty_intermediate_tensors = make_empty_intermediate_tensors_factory(
+            ["hidden_states"], config.hidden_size
+        )
 
     def forward(
         self,
@@ -493,20 +504,20 @@ class ChatGLMModel(nn.Module):
 
         self.config = config
 
-        self.embedding = VocabParallelEmbedding(config.padded_vocab_size,
-                                                config.hidden_size,
-                                                quant_config=quant_config)
+        self.embedding = VocabParallelEmbedding(
+            config.padded_vocab_size, config.hidden_size, quant_config=quant_config
+        )
 
         self.num_layers = config.num_layers
         self.multi_query_group_num = config.multi_query_group_num
         self.kv_channels = config.kv_channels
         self.encoder = GLMTransformer(config, cache_config, quant_config)
 
-        self.output_layer = ParallelLMHead(config.padded_vocab_size,
-                                           config.hidden_size,
-                                           quant_config=quant_config)
+        self.output_layer = ParallelLMHead(
+            config.padded_vocab_size, config.hidden_size, quant_config=quant_config
+        )
 
-        vision_config_flag = getattr(config, 'vision_config', None)
+        vision_config_flag = getattr(config, "vision_config", None)
         if vision_config_flag is not None:
             self.vision_config = Namespace(**config.vision_config)
             self.vision = EVA2CLIPModel(self.config, quant_config)
@@ -514,10 +525,10 @@ class ChatGLMModel(nn.Module):
             self.vision = None
 
         self.make_empty_intermediate_tensors = (
-            self.encoder.make_empty_intermediate_tensors)
+            self.encoder.make_empty_intermediate_tensors
+        )
 
-    def _parse_and_validate_image_input(
-            self, **kwargs: object) -> GLMImagePixelInputs:
+    def _parse_and_validate_image_input(self, **kwargs: object) -> GLMImagePixelInputs:
 
         pixel_values = kwargs.pop("pixel_values", None)
         if pixel_values is not None and self.vision is not None:
@@ -527,9 +538,11 @@ class ChatGLMModel(nn.Module):
             elif isinstance(pixel_values, list):
                 return torch.concat(pixel_values)
             else:
-                raise TypeError("""pixel_values must be a torch.Tensor 
+                raise TypeError(
+                    """pixel_values must be a torch.Tensor 
                     or a list of torch.Tensor
-                    """)
+                    """
+                )
         return GLMImagePixelInputs(pixel_values=pixel_values)
 
     def forward(
@@ -546,8 +559,7 @@ class ChatGLMModel(nn.Module):
             image_input = self._parse_and_validate_image_input(**kwargs)
 
             if image_input["pixel_values"] is not None:
-                pixel_values = image_input["pixel_values"].to(
-                    dtype=inputs_embeds.dtype)
+                pixel_values = image_input["pixel_values"].to(dtype=inputs_embeds.dtype)
                 image_embeds = self.vision(pixel_values)
 
                 boi_token_id = self.config.boi_token_id
@@ -558,7 +570,8 @@ class ChatGLMModel(nn.Module):
                     inputs_embeds=inputs_embeds,
                     vision_embeddings=image_embeds,
                     boi_token_id=boi_token_id,
-                    eoi_token_id=eoi_token_id)
+                    eoi_token_id=eoi_token_id,
+                )
         else:
             inputs_embeds = intermediate_tensors["hidden_states"]
 
@@ -579,11 +592,10 @@ class ChatGLMModel(nn.Module):
 @MULTIMODAL_REGISTRY.register_max_image_tokens(get_max_glmv_image_tokens)
 @INPUT_REGISTRY.register_dummy_data(dummy_data_for_glmv)
 @INPUT_REGISTRY.register_input_processor(input_processor_for_glmv)
-class ChatGLMForCausalLM(nn.Module, SupportsLoRA, SupportsPP,
-                         SupportsMultiModal):
+class ChatGLMForCausalLM(nn.Module, SupportsLoRA, SupportsPP, SupportsMultiModal):
     packed_modules_mapping = {
         "query_key_value": ["query_key_value"],
-        "dense_h_to_4h": ["dense_h_to_4h"]
+        "dense_h_to_4h": ["dense_h_to_4h"],
     }
     # LoRA specific attributes
     supported_lora_modules = [
@@ -610,26 +622,31 @@ class ChatGLMForCausalLM(nn.Module, SupportsLoRA, SupportsPP,
         self.multimodal_config = multimodal_config
 
         self.quant_config = quant_config
-        self.max_position_embeddings = getattr(config, "max_sequence_length",
-                                               8192)
+        self.max_position_embeddings = getattr(config, "max_sequence_length", 8192)
         self.transformer = ChatGLMModel(config, cache_config, quant_config)
         if self.config.tie_word_embeddings:
-            self.transformer.output_layer.weight = (
-                self.transformer.embedding.weight)
+            self.transformer.output_layer.weight = self.transformer.embedding.weight
         self.lm_head = self.transformer.output_layer
         self.logits_processor = LogitsProcessor(config.padded_vocab_size)
         self.sampler = Sampler()
 
-    def forward(self,
-                input_ids: torch.Tensor,
-                positions: torch.Tensor,
-                kv_caches: List[torch.Tensor],
-                attn_metadata: AttentionMetadata,
-                intermediate_tensors: Optional[IntermediateTensors] = None,
-                **kwargs) -> torch.Tensor:
-        hidden_states = self.transformer(input_ids, positions, kv_caches,
-                                         attn_metadata, intermediate_tensors,
-                                         **kwargs)
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+        kv_caches: List[torch.Tensor],
+        attn_metadata: AttentionMetadata,
+        intermediate_tensors: Optional[IntermediateTensors] = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        hidden_states = self.transformer(
+            input_ids,
+            positions,
+            kv_caches,
+            attn_metadata,
+            intermediate_tensors,
+            **kwargs,
+        )
         return hidden_states
 
     def compute_logits(
@@ -637,8 +654,7 @@ class ChatGLMForCausalLM(nn.Module, SupportsLoRA, SupportsPP,
         hidden_states: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
+        logits = self.logits_processor(self.lm_head, hidden_states, sampling_metadata)
         return logits
 
     def sample(
@@ -678,15 +694,12 @@ class ChatGLMForCausalLM(nn.Module, SupportsLoRA, SupportsPP,
             if is_pp_missing_parameter(name, self):
                 continue
             param = params_dict[name]
-            weight_loader = getattr(param, "weight_loader",
-                                    default_weight_loader)
+            weight_loader = getattr(param, "weight_loader", default_weight_loader)
             weight_loader(param, loaded_weight)
 
         for combined_name, merged_weight_dict in merged_weights_dict.items():
             if combined_name in params_dict:
                 param = params_dict[combined_name]
-                combined_weight = torch.cat(list(merged_weight_dict.values()),
-                                            dim=0)
-                weight_loader = getattr(param, "weight_loader",
-                                        default_weight_loader)
+                combined_weight = torch.cat(list(merged_weight_dict.values()), dim=0)
+                weight_loader = getattr(param, "weight_loader", default_weight_loader)
                 weight_loader(param, combined_weight)

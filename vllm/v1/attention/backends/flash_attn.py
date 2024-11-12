@@ -1,11 +1,16 @@
 """Attention layer with FlashAttention."""
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import torch
 
-from vllm.attention.backends.abstract import (AttentionBackend, AttentionImpl,
-                                              AttentionMetadata, AttentionType)
+from vllm.attention.backends.abstract import (
+    AttentionBackend,
+    AttentionImpl,
+    AttentionMetadata,
+    AttentionType,
+)
 from vllm.forward_context import get_forward_context
 from vllm.vllm_flash_attn import flash_attn_varlen_func
 
@@ -73,8 +78,7 @@ class FlashAttentionImpl(AttentionImpl):
         logits_soft_cap: Optional[float] = None,
     ) -> None:
         if blocksparse_params is not None:
-            raise ValueError(
-                "FlashAttention does not support block-sparse attention.")
+            raise ValueError("FlashAttention does not support block-sparse attention.")
         self.num_heads = num_heads
         self.head_size = head_size
         self.scale = float(scale)
@@ -99,7 +103,8 @@ class FlashAttentionImpl(AttentionImpl):
         if head_size not in support_head_sizes:
             raise ValueError(
                 f"Head size {head_size} is not supported by FlashAttention. "
-                f"Supported head sizes are: {support_head_sizes}.")
+                f"Supported head sizes are: {support_head_sizes}."
+            )
 
     def forward(
         self,
@@ -124,14 +129,17 @@ class FlashAttentionImpl(AttentionImpl):
             shape = [num_tokens, num_heads * head_size]
         """
         if attn_type != AttentionType.DECODER:
-            raise NotImplementedError("Encoder self-attention and "
-                                      "encoder/decoder cross-attention "
-                                      "are not implemented for "
-                                      "FlashAttentionImpl")
+            raise NotImplementedError(
+                "Encoder self-attention and "
+                "encoder/decoder cross-attention "
+                "are not implemented for "
+                "FlashAttentionImpl"
+            )
 
         # NOTE(woosuk): FlashAttention does not support FP8 KV cache.
-        assert k_scale == 1.0 and v_scale == 1.0, (
-            "key/v_scale is not supported in FlashAttention.")
+        assert (
+            k_scale == 1.0 and v_scale == 1.0
+        ), "key/v_scale is not supported in FlashAttention."
 
         output = torch.ops.vllm.unified_flash_attention(
             query,
@@ -152,8 +160,7 @@ class FlashAttentionImpl(AttentionImpl):
         return output
 
 
-@torch.library.custom_op("vllm::unified_flash_attention",
-                         mutates_args=["kv_cache"])
+@torch.library.custom_op("vllm::unified_flash_attention", mutates_args=["kv_cache"])
 def unified_flash_attention(
     query: torch.Tensor,
     key: torch.Tensor,

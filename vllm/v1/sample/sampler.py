@@ -1,4 +1,5 @@
 """A layer that samples the next tokens from the model's outputs."""
+
 from typing import List, Optional
 
 import torch
@@ -30,7 +31,8 @@ class Sampler(nn.Module):
             # FIXME: Mask the sampled token_id, get topk logprobs,
             # and concatenate the topk with the sampled token_id.
             topk_logprobs, topk_indices = torch.topk(
-                logprobs, sampling_metadata.max_num_logprobs, dim=-1)
+                logprobs, sampling_metadata.max_num_logprobs, dim=-1
+            )
             # Use int32 to reduce the tensor size.
             topk_indices = topk_indices.to(torch.int32)
         else:
@@ -107,18 +109,18 @@ class Sampler(nn.Module):
         probs: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> torch.Tensor:
-        assert not (sampling_metadata.all_greedy
-                    and sampling_metadata.all_random)
+        assert not (sampling_metadata.all_greedy and sampling_metadata.all_random)
         if sampling_metadata.all_greedy:
             return self.greedy_sample(probs)
         if sampling_metadata.all_random:
-            return self.random_sample(probs, sampling_metadata.generators,
-                                      sampling_metadata.no_generator)
+            return self.random_sample(
+                probs, sampling_metadata.generators, sampling_metadata.no_generator
+            )
 
         greedy_sampled = self.greedy_sample(probs)
-        random_sampled = self.random_sample(probs,
-                                            sampling_metadata.generators,
-                                            sampling_metadata.no_generator)
+        random_sampled = self.random_sample(
+            probs, sampling_metadata.generators, sampling_metadata.no_generator
+        )
         sampled = torch.where(
             sampling_metadata.temperature < _SAMPLING_EPS,
             greedy_sampled,

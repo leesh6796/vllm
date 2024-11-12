@@ -7,7 +7,7 @@ from vllm.utils import Device
 
 class PlaceholderBlockSpaceManager(BlockSpaceManager):
     """A version of BlockSpaceManager for use in environments
-    where block management is not required. 
+    where block management is not required.
     For example: embedding models or attention-free models like Mamba.
 
     This class provides the same interface as BlockSpaceManager, but its
@@ -22,9 +22,9 @@ class PlaceholderBlockSpaceManager(BlockSpaceManager):
     ) -> None:
         pass
 
-    def can_allocate(self,
-                     seq_group: SequenceGroup,
-                     num_lookahead_slots: int = 0) -> AllocStatus:
+    def can_allocate(
+        self, seq_group: SequenceGroup, num_lookahead_slots: int = 0
+    ) -> AllocStatus:
         # Always return OK for dummy purposes
         return AllocStatus.OK
 
@@ -32,8 +32,9 @@ class PlaceholderBlockSpaceManager(BlockSpaceManager):
         # No actual allocation logic needed
         pass
 
-    def can_append_slots(self, seq_group: SequenceGroup,
-                         num_lookahead_slots: int) -> bool:
+    def can_append_slots(
+        self, seq_group: SequenceGroup, num_lookahead_slots: int
+    ) -> bool:
         return True
 
     def append_slots(
@@ -46,8 +47,9 @@ class PlaceholderBlockSpaceManager(BlockSpaceManager):
     def fork(self, parent_seq: Sequence, child_seq: Sequence) -> None:
         pass
 
-    def can_swap_in(self, seq_group: SequenceGroup,
-                    num_lookahead_slots: int) -> AllocStatus:
+    def can_swap_in(
+        self, seq_group: SequenceGroup, num_lookahead_slots: int
+    ) -> AllocStatus:
         return AllocStatus.OK
 
     def swap_in(self, seq_group: SequenceGroup) -> List[Tuple[int, int]]:
@@ -79,12 +81,10 @@ class PlaceholderBlockSpaceManager(BlockSpaceManager):
     ) -> None:
         pass
 
-    def get_common_computed_block_ids(self,
-                                      seq_group: List[Sequence]) -> List[int]:
+    def get_common_computed_block_ids(self, seq_group: List[Sequence]) -> List[int]:
         return []
 
-    def mark_blocks_as_computed(self, seq_group: SequenceGroup,
-                                token_chunk_size: int):
+    def mark_blocks_as_computed(self, seq_group: SequenceGroup, token_chunk_size: int):
         pass
 
     def get_prefix_cache_hit_rate(self, device: Device) -> float:

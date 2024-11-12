@@ -1,16 +1,29 @@
 import time
-from typing import (Any, Dict, Iterable, List, Mapping, Optional, Tuple, Type,
-                    Union)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Type, Union
 
-from vllm.config import (CacheConfig, DecodingConfig, DeviceConfig,
-                         EngineConfig, LoadConfig, LoRAConfig, ModelConfig,
-                         ObservabilityConfig, ParallelConfig,
-                         PromptAdapterConfig, SchedulerConfig,
-                         SpeculativeConfig)
+from vllm.config import (
+    CacheConfig,
+    DecodingConfig,
+    DeviceConfig,
+    EngineConfig,
+    LoadConfig,
+    LoRAConfig,
+    ModelConfig,
+    ObservabilityConfig,
+    ParallelConfig,
+    PromptAdapterConfig,
+    SchedulerConfig,
+    SpeculativeConfig,
+)
 from vllm.engine.arg_utils import EngineArgs
 from vllm.engine.metrics_types import StatLoggerBase
-from vllm.inputs import (INPUT_REGISTRY, DecoderOnlyInputs,
-                         EncoderDecoderLLMInputs, InputRegistry, PromptType)
+from vllm.inputs import (
+    INPUT_REGISTRY,
+    DecoderOnlyInputs,
+    EncoderDecoderLLMInputs,
+    InputRegistry,
+    PromptType,
+)
 from vllm.inputs.preprocess import InputPreprocessor
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
@@ -20,7 +33,9 @@ from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sampling_params import RequestOutputKind, SamplingParams
 from vllm.transformers_utils.config import try_get_generation_config
 from vllm.transformers_utils.tokenizer_group import (
-    BaseTokenizerGroup, init_tokenizer_from_configs)
+    BaseTokenizerGroup,
+    init_tokenizer_from_configs,
+)
 from vllm.usage.usage_lib import UsageContext
 from vllm.v1.core.scheduler import Scheduler
 from vllm.v1.executor.gpu_executor import GPUExecutor
@@ -122,8 +137,7 @@ class LLMEngine:
         self.load_config = load_config
         self.decoding_config = decoding_config or DecodingConfig()
         self.prompt_adapter_config = prompt_adapter_config
-        self.observability_config = observability_config or ObservabilityConfig(
-        )
+        self.observability_config = observability_config or ObservabilityConfig()
         self.log_stats = log_stats
 
         assert not self.model_config.skip_tokenizer_init
@@ -134,13 +148,10 @@ class LLMEngine:
             self.tokenizer.ping()
         self.detokenizer = Detokenizer(self.model_config.tokenizer)
 
-        self.generation_config_fields = _load_generation_config_dict(
-            model_config)
-        self.input_preprocessor = InputPreprocessor(model_config,
-                                                    self.tokenizer)
+        self.generation_config_fields = _load_generation_config_dict(model_config)
+        self.input_preprocessor = InputPreprocessor(model_config, self.tokenizer)
         self.input_registry = input_registry
-        self.input_processor = input_registry.create_input_processor(
-            model_config)
+        self.input_processor = input_registry.create_input_processor(model_config)
 
         # Request id -> Request
         self.requests: Dict[str, Request] = {}
@@ -175,15 +186,15 @@ class LLMEngine:
         self.scheduler = Scheduler(scheduler_config, cache_config, lora_config)
 
     def _initialize_kv_caches(self) -> None:
-        num_gpu_blocks, _ = self.model_executor.determine_num_available_blocks(
-        )
+        num_gpu_blocks, _ = self.model_executor.determine_num_available_blocks()
 
         if self.cache_config.num_gpu_blocks_override is not None:
             num_gpu_blocks_override = self.cache_config.num_gpu_blocks_override
             logger.info(
-                "Overriding num_gpu_blocks=%d with "
-                "num_gpu_blocks_override=%d", num_gpu_blocks,
-                num_gpu_blocks_override)
+                "Overriding num_gpu_blocks=%d with " "num_gpu_blocks_override=%d",
+                num_gpu_blocks,
+                num_gpu_blocks_override,
+            )
             num_gpu_blocks = num_gpu_blocks_override
 
         self.cache_config.num_gpu_blocks = num_gpu_blocks
@@ -216,18 +227,17 @@ class LLMEngine:
             model_config=self.model_config,
             scheduler_config=self.scheduler_config,
             parallel_config=self.parallel_config,
-            enable_lora=bool(self.lora_config))
+            enable_lora=bool(self.lora_config),
+        )
 
     def _verify_args(self) -> None:
         self.model_config.verify_with_parallel_config(self.parallel_config)
         self.cache_config.verify_with_parallel_config(self.parallel_config)
         if self.lora_config:
             self.lora_config.verify_with_model_config(self.model_config)
-            self.lora_config.verify_with_scheduler_config(
-                self.scheduler_config)
+            self.lora_config.verify_with_scheduler_config(self.scheduler_config)
         if self.prompt_adapter_config:
-            self.prompt_adapter_config.verify_with_model_config(
-                self.model_config)
+            self.prompt_adapter_config.verify_with_model_config(self.model_config)
 
     def _add_processed_request(
         self,
@@ -248,12 +258,12 @@ class LLMEngine:
         assert isinstance(params, SamplingParams)
         sampling_params = params.clone()
         sampling_params.update_from_generation_config(
-            self.generation_config_fields, eos_token_id)
+            self.generation_config_fields, eos_token_id
+        )
 
         # TODO(woosuk): Check max_logprobs
         # TODO(woosuk): Support encoder-decoder models.
-        req = Request(request_id, processed_inputs, params, eos_token_id,
-                      arrival_time)
+        req = Request(request_id, processed_inputs, params, eos_token_id, arrival_time)
         self.requests[request_id] = req
         self.num_lagged_steps[request_id] = 0
         self.scheduler.add_request(req)
@@ -273,8 +283,9 @@ class LLMEngine:
         priority: int = 0,
     ) -> None:
         if lora_request is not None and not self.lora_config:
-            raise ValueError(f"Got lora_request {lora_request} but LoRA is "
-                             "not enabled!")
+            raise ValueError(
+                f"Got lora_request {lora_request} but LoRA is " "not enabled!"
+            )
         if arrival_time is None:
             arrival_time = time.time()
         assert priority == 0, "vLLM V1 does not support priority at the moment."
@@ -298,8 +309,7 @@ class LLMEngine:
         )
 
     def abort_request(self, request_id: Union[str, Iterable[str]]) -> None:
-        self.scheduler.finish_requests(request_id,
-                                       RequestStatus.FINISHED_ABORTED)
+        self.scheduler.finish_requests(request_id, RequestStatus.FINISHED_ABORTED)
         self._free_request(request_id)
 
     def get_num_unfinished_requests(self) -> int:
@@ -320,8 +330,7 @@ class LLMEngine:
         if self.scheduler.has_unfinished_requests():
             scheduler_output = self.scheduler.schedule()
             output = self.model_executor.execute_model(scheduler_output)
-            sampled = self.scheduler.update_from_output(
-                scheduler_output, output)
+            sampled = self.scheduler.update_from_output(scheduler_output, output)
             self.send_to_detokenizer(sampled)
         req_outputs = self.recv_from_detokenizer()
         return req_outputs
@@ -344,10 +353,10 @@ class LLMEngine:
                 # The prompt token ids are already cached in the detokenizer.
                 inputs.prompt_token_ids.append([])
             inputs.new_token_ids.append(req.output_token_ids[-num_tokens:])
-            inputs.skip_special_tokens.append(
-                req.sampling_params.skip_special_tokens)
+            inputs.skip_special_tokens.append(req.sampling_params.skip_special_tokens)
             inputs.spaces_between_special_tokens.append(
-                req.sampling_params.spaces_between_special_tokens)
+                req.sampling_params.spaces_between_special_tokens
+            )
 
             # Update the number of lagged steps.
             self.num_lagged_steps[req.request_id] += 1
@@ -371,11 +380,13 @@ class LLMEngine:
             req.output_text += detokenizer_output.detokenized_texts[i]
 
             self.num_lagged_steps[req_id] -= 1
-            finished = (self.num_lagged_steps[req_id] == 0
-                        and req.is_finished())
+            finished = self.num_lagged_steps[req_id] == 0 and req.is_finished()
             req_output = self._make_request_output(
-                req, detokenizer_output.num_output_token_ids[i],
-                detokenizer_output.detokenized_texts[i], finished)
+                req,
+                detokenizer_output.num_output_token_ids[i],
+                detokenizer_output.detokenized_texts[i],
+                finished,
+            )
             req_outputs.append(req_output)
 
             if finished:
@@ -422,15 +433,14 @@ class LLMEngine:
         completion_output = req_output.outputs[0]
         if request.sampling_params.output_kind == RequestOutputKind.CUMULATIVE:
             completion_output.text += new_output_text
-            completion_output.token_ids = (
-                request.output_token_ids[:num_output_tokens])
+            completion_output.token_ids = request.output_token_ids[:num_output_tokens]
         elif request.sampling_params.output_kind == RequestOutputKind.DELTA:
             completion_output.text = new_output_text
             num_prev_tokens = len(completion_output.token_ids)
             completion_output.token_ids = request.output_token_ids[
-                num_prev_tokens:num_output_tokens]
-        elif (request.sampling_params.output_kind ==
-              RequestOutputKind.FINAL_ONLY):
+                num_prev_tokens:num_output_tokens
+            ]
+        elif request.sampling_params.output_kind == RequestOutputKind.FINAL_ONLY:
             if finished:
                 completion_output.text = request.output_text
                 completion_output.token_ids = request.output_token_ids
@@ -454,8 +464,9 @@ class LLMEngine:
             self.tokenizer.check_health()
         self.model_executor.check_health()
 
-    def _validate_model_inputs(self, inputs: Union[DecoderOnlyInputs,
-                                                   EncoderDecoderLLMInputs]):
+    def _validate_model_inputs(
+        self, inputs: Union[DecoderOnlyInputs, EncoderDecoderLLMInputs]
+    ):
         prompt_ids = inputs.get("prompt_token_ids")
         if prompt_ids is None or len(prompt_ids) == 0:
             raise ValueError("Prompt cannot be empty")
@@ -470,7 +481,8 @@ class LLMEngine:
                     "Make sure that `max_model_len` is no smaller than the "
                     "number of text tokens plus multimodal tokens. For image "
                     "inputs, the number of image tokens depends on the number "
-                    "of images, and possibly their aspect ratios as well.")
+                    "of images, and possibly their aspect ratios as well."
+                )
 
     @classmethod
     def validate_outputs(cls, outputs, output_type):
